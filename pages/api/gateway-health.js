@@ -1,1 +1,17 @@
-export default function handler(req,res){const hasApiKey=!!process.env.AI_GATEWAY_API_KEY;const hasOidc=!!process.env.VERCEL_OIDC_TOKEN;const ok=hasApiKey||hasOidc;res.status(ok?200:503).json({ok,provider:'vercel-ai-gateway',auth:hasApiKey?'api-key':hasOidc?'oidc':'missing',apiKeyPresent:hasApiKey,oidcPresent:hasOidc});}
+import { getVercelOidcToken } from '@vercel/oidc';
+
+export default async function handler(req,res){
+  const hasApiKey=!!process.env.AI_GATEWAY_API_KEY;
+  let oidcPresent=false;
+  if(!hasApiKey){
+    try{ oidcPresent=!!(await getVercelOidcToken()); }catch{}
+  }
+  const ok=hasApiKey||oidcPresent;
+  res.status(ok?200:503).json({
+    ok,
+    provider:'vercel-ai-gateway',
+    auth:hasApiKey?'api-key':oidcPresent?'oidc':'missing',
+    apiKeyPresent:hasApiKey,
+    oidcPresent
+  });
+}
