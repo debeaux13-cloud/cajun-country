@@ -2,6 +2,7 @@ import {useEffect,useState} from 'react';
 import {useRouter} from 'next/router';
 
 const ORDER_KEY='mcs-latest-checkout-session';
+const ORDER_REF_KEY='mcs-latest-order-reference';
 
 function label(state){
   if(state==='ready')return 'Ready to watch';
@@ -14,21 +15,26 @@ function label(state){
 export default function MyOrders(){
   const router=useRouter();
   const[sessionId,setSessionId]=useState('');
+  const[orderId,setOrderId]=useState('');
   const[order,setOrder]=useState(null);
   const[error,setError]=useState('');
 
   useEffect(()=>{
     if(!router.isReady)return;
     const queryId=Array.isArray(router.query.session_id)?router.query.session_id[0]:router.query.session_id;
+    const queryOrder=Array.isArray(router.query.order_id)?router.query.order_id[0]:router.query.order_id;
     const id=String(queryId||window.localStorage.getItem(ORDER_KEY)||'').trim();
+    const orderRef=String(queryOrder||window.localStorage.getItem(ORDER_REF_KEY)||'').trim();
     if(id){
       setSessionId(id);
-      if(queryId){
+      setOrderId(orderRef);
+      if(queryId||queryOrder){
         window.localStorage.setItem(ORDER_KEY,id);
+        if(orderRef)window.localStorage.setItem(ORDER_REF_KEY,orderRef);
         router.replace('/my-orders',undefined,{shallow:true});
       }
     }
-  },[router.isReady,router.query.session_id]);
+  },[router.isReady,router.query.session_id,router.query.order_id]);
 
   useEffect(()=>{
     if(!sessionId)return;
@@ -39,7 +45,7 @@ export default function MyOrders(){
         const response=await fetch('/api/order-status',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({sessionId})
+          body:JSON.stringify({sessionId,orderId})
         });
         const result=await response.json();
         if(!response.ok&&response.status!==202)throw new Error(result.error||'Order status is unavailable');
@@ -53,7 +59,7 @@ export default function MyOrders(){
     };
     check();
     return()=>{active=false;if(timer)clearTimeout(timer)};
-  },[sessionId]);
+  },[sessionId,orderId]);
 
   return <main style={{minHeight:'100vh',background:'#fff7f1',color:'#24152e',fontFamily:'Arial,sans-serif'}}>
     <div style={{maxWidth:900,margin:'0 auto',padding:24}}>

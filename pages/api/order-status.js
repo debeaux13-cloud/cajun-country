@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import {head} from '@vercel/blob';
 import {runpod} from './_runpod';
 
@@ -10,8 +11,15 @@ async function stripeSession(id,key){
     headers:{Authorization:`Bearer ${key}`}
   });
   const session=await response.json();
-  if(!response.ok)throw new Error('Checkout session could not be verified');
-  return session;
+  return response.ok?session:null;
+}
+
+function validUuid(value){
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value||''));
+}
+
+function validPaidSession(session){
+  return session?.mode==='payment'&&session?.status==='complete'&&session?.payment_status==='paid'&&session?.amount_total===4900&&session?.currency==='usd'&&session?.metadata?.product==='mcs_3_minute_movie';
 }
 
 async function privateJson(path,token){
@@ -46,27 +54,48 @@ export default async function handler(req,res){
   res.setHeader('Referrer-Policy','no-referrer');
 
   const sessionId=String(req.body?.sessionId||'').trim();
+  const suppliedOrderId=String(req.body?.orderId||'').trim();
   if(!/^cs_(?:test_)?[A-Za-z0-9_]{20,}$/.test(sessionId)){
     return res.status(400).json({error:'A valid checkout session is required'});
   }
 
   const key=stripeKey();
   const token=process.env.BLOB_READ_WRITE_TOKEN;
-  if(!key||!token)return res.status(503).json({error:'Order tracking is not configured'});
+  if(!token)return res.status(503).json({error:'Order tracking is not configured'});
 
   try{
-    const session=await stripeSession(sessionId,key);
-    const metadata=session.metadata||{};
-    if(session.mode!=='payment'||session.status!=='complete'||session.payment_status!=='paid'||session.amount_total!==4900||session.currency!=='usd'||metadata.product!=='mcs_3_minute_movie'){
-      return res.status(403).json({error:'This checkout has not unlocked a movie'});
+    let mcsJobId='';
+    let order=null;
+    if(key){
+      const session=await stripeSession(sessionId,key);
+      if(session){
+        if(!validPaidSession(session))return res.status(403).json({error:'This checkout has not unlocked a movie'});
+        mcsJobId=String(session.metadata?.mcsJobId||'').trim();
+      }
     }
 
-    const mcsJobId=String(metadata.mcsJobId||'').trim();
-    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(mcsJobId))return res.status(409).json({error:'This order is missing its movie reference'});
+    if(!validUuid(mcsJobId)){
+      const sessionHash=crypto.createHash('sha256').update(sessionId).digest('hex');
+      try{
+        const mapping=await privateJson(`mcs/checkout-sessions/${sessionHash}.json`,token);
+        if(String(mapping.stripeSessionId||'')===sessionId&&validUuid(mapping.mcsJobId)){
+          mcsJobId=String(mapping.mcsJobId);order=mapping;
+        }
+      }catch{}
+    }
 
-    let order;
-    try{order=await privateJson(`mcs/orders/${mcsJobId}.json`,token)}
-    catch{return res.status(202).json({ok:true,state:'starting',message:'Payment received. Your movie is starting.'})}
+    if(!validUuid(mcsJobId)&&validUuid(suppliedOrderId)){
+      try{
+        const candidate=await privateJson(`mcs/orders/${suppliedOrderId}.json`,token);
+        if(String(candidate.stripeSessionId||'')===sessionId){mcsJobId=suppliedOrderId;order=candidate}
+      }catch{}
+    }
+
+    if(!validUuid(mcsJobId))return res.status(202).json({ok:true,state:'starting',message:'Payment received. Your movie is starting.'});
+    if(!order){
+      try{order=await privateJson(`mcs/orders/${mcsJobId}.json`,token)}
+      catch{return res.status(202).json({ok:true,state:'starting',message:'Payment received. Your movie is starting.'})}
+    }
 
     if(String(order.stripeSessionId||'')!==sessionId||!String(order.runpodJobId||'').trim()){
       return res.status(409).json({error:'This checkout does not match the saved order'});
@@ -113,8 +142,8 @@ export default async function handler(req,res){
         :state==='needs_attention'
           ?'Your order is safe. The movie needs studio review before delivery.'
           :'Your movie is continuing from the preview you approved.',
-      movieUrl:state==='ready'?`/api/order-media?session_id=${encodeURIComponent(sessionId)}&kind=movie`:null,
-      storybookUrl:state==='ready'?`/api/order-media?session_id=${encodeURIComponent(sessionId)}&kind=storybook`:null
+      movieUrl:state==='ready'?`/api/order-media?session_id=${encodeURIComponent(sessionId)}&order_id=${encodeURIComponent(mcsJobId)}&kind=movie`:null,
+      storybookUrl:state==='ready'?`/api/order-media?session_id=${encodeURIComponent(sessionId)}&order_id=${encodeURIComponent(mcsJobId)}&kind=storybook`:null
     });
   }catch(error){
     console.error('Order status lookup failed',error);

@@ -63,6 +63,13 @@ async function blobExists(path,token){
   try{await head(path,{token});return true}catch{return false}
 }
 
+async function privateJson(path,token){
+  const meta=await head(path,{token});
+  const response=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`}});
+  if(!response.ok)throw new Error('Stored Stripe event could not be read');
+  return response.json();
+}
+
 export default async function handler(req,res){
   const secrets=await webhookSecrets();
   if(req.method==='GET'){
@@ -89,7 +96,7 @@ export default async function handler(req,res){
   }
 
   const metadata=session.metadata||{};
-  if(metadata.product!=='mcs_3_minute_movie'){
+  if(session.mode!=='payment'||session.amount_total!==4900||session.currency!=='usd'||metadata.product!=='mcs_3_minute_movie'){
     return res.status(200).json({received:true,ignored:true});
   }
 
@@ -99,8 +106,23 @@ export default async function handler(req,res){
   const token=process.env.BLOB_READ_WRITE_TOKEN;
   if(!token)return res.status(503).json({error:'Blob storage missing'});
 
+  const stripeSessionId=String(session.id||'');
+  const sessionHash=crypto.createHash('sha256').update(stripeSessionId).digest('hex');
   const eventPath=`mcs/stripe-events/${String(event.id)}.json`;
+  const orderPath=`mcs/orders/${mcsJobId}.json`;
+  const sessionPath=`mcs/checkout-sessions/${sessionHash}.json`;
+  const options={access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'};
   if(await blobExists(eventPath,token)){
+    try{
+      const existing=await privateJson(eventPath,token);
+      await put(sessionPath,JSON.stringify(existing),options);
+    }catch{}
+    return res.status(200).json({received:true,duplicate:true});
+  }
+  if(await blobExists(orderPath,token)){
+    const existing=await privateJson(orderPath,token);
+    await put(sessionPath,JSON.stringify(existing),options);
+    await put(eventPath,JSON.stringify(existing),options);
     return res.status(200).json({received:true,duplicate:true});
   }
 
@@ -128,15 +150,15 @@ export default async function handler(req,res){
 
     const record={
       stripeEventId:String(event.id),
-      stripeSessionId:String(session.id||''),
+      stripeSessionId,
       mcsJobId,
       runpodJobId:String(result.id||''),
       runpodStatus:String(result.status||'IN_QUEUE'),
       mode:event.livemode?'live':'test',
       createdAt:new Date().toISOString()
     };
-    const options={access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'};
-    await put(`mcs/orders/${mcsJobId}.json`,JSON.stringify(record),options);
+    await put(orderPath,JSON.stringify(record),options);
+    await put(sessionPath,JSON.stringify(record),options);
     await put(eventPath,JSON.stringify(record),options);
     return res.status(200).json({received:true,started:true});
   }catch(error){
