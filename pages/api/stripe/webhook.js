@@ -15,8 +15,8 @@ async function rawBody(req){
   return Buffer.concat(chunks);
 }
 
-function webhookSecrets(){
-  return [
+async function webhookSecrets(){
+  const secrets=[
     process.env.STRIPE_WEBHOOK_SECRET,
     process.env.STRIPE_TEST_WEBHOOK_SECRET,
     process.env.Stripe_Webhook,
@@ -24,9 +24,21 @@ function webhookSecrets(){
     process.env.stripeWebhook,
     process.env.STRIPE_WEBHOOK
   ].filter(Boolean);
+  const token=process.env.BLOB_READ_WRITE_TOKEN;
+  if(token){
+    try{
+      const meta=await head('mcs/config/stripe-test-webhook-secret.json',{token});
+      const response=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`}});
+      if(response.ok){
+        const stored=await response.json();
+        if(stored?.secret)secrets.push(String(stored.secret));
+      }
+    }catch{}
+  }
+  return [...new Set(secrets)];
 }
 
-function verifySignature(payload,header){
+function verifySignature(payload,header,secrets){
   if(!header)return false;
   const parts=String(header).split(',').map(part=>part.trim().split('='));
   const timestamp=parts.find(([key])=>key==='t')?.[1];
@@ -35,7 +47,7 @@ function verifySignature(payload,header){
   const age=Math.abs(Math.floor(Date.now()/1000)-Number(timestamp));
   if(!Number.isFinite(age)||age>300)return false;
   const signed=Buffer.concat([Buffer.from(String(timestamp)+'.'),payload]);
-  return webhookSecrets().some(secret=>{
+  return secrets.some(secret=>{
     const expected=crypto.createHmac('sha256',secret).update(signed).digest('hex');
     return signatures.some(signature=>{
       try{
@@ -52,15 +64,16 @@ async function blobExists(path,token){
 }
 
 export default async function handler(req,res){
+  const secrets=await webhookSecrets();
   if(req.method==='GET'){
-    const configured=webhookSecrets().length>0;
+    const configured=secrets.length>0;
     return res.status(configured?200:503).json({ok:configured,configured});
   }
   if(req.method!=='POST')return res.status(405).json({error:'POST only'});
-  if(!webhookSecrets().length)return res.status(503).json({error:'Stripe webhook secret missing'});
+  if(!secrets.length)return res.status(503).json({error:'Stripe webhook secret missing'});
 
   const payload=await rawBody(req);
-  if(!verifySignature(payload,req.headers['stripe-signature'])){
+  if(!verifySignature(payload,req.headers['stripe-signature'],secrets)){
     return res.status(400).json({error:'Invalid Stripe signature'});
   }
 
