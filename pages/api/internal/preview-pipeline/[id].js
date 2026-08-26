@@ -1,4 +1,4 @@
-import{head}from'@vercel/blob';
+import{head,put}from'@vercel/blob';
 import{subjectContract}from'../../../../lib/subject-contract';
 function auth(req){const s=process.env.MCS_WORKER_SECRET||'';const h=req.headers.authorization||'';return !!s&&(h==='Bearer '+s||h===s)}
 async function loadStory(id){const token=process.env.BLOB_READ_WRITE_TOKEN;if(!token)throw new Error('Blob storage missing');const path=`mcs/jobs/${id}/story-plan.bin`;const meta=await head(path,{token});const r=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)throw new Error(`Story fetch failed ${r.status}`);const saved=JSON.parse(await r.text());if(!Array.isArray(saved?.screenplay?.scenes)||saved.screenplay.scenes.length!==18)throw new Error('Structured screenplay missing');return saved}
@@ -33,4 +33,14 @@ async function contract(id){
     contract:{scenes:6,previewScenes:6,secondsPerScene:10,previewSeconds:60,movieSeconds:60,fullMovieScenes:18,fullMovieSeconds:180,subjectCount:traits.subject_count,subjectType:traits.subject_type,musicVibe:selectedVibe,musicAssetKind:'music-bed',reusePreviewMusic:true,petRouting:'runway-gen4-turbo-only',animalPoseDetection:false}
   };
 }
-export default async function handler(req,res){if(!auth(req))return res.status(401).send('Unauthorized');const{id}=req.query;if(req.method==='GET'){try{return res.status(200).json(await contract(id))}catch(e){return res.status(500).json({error:e.message})}}if(req.method==='PATCH')return res.status(200).json({ok:true,id,...(req.body||{})});return res.status(405).json({error:'Method not allowed'})}
+export default async function handler(req,res){if(!auth(req))return res.status(401).send('Unauthorized');const{id}=req.query;if(req.method==='GET'){try{return res.status(200).json(await contract(id))}catch(e){return res.status(500).json({error:e.message})}}if(req.method==='PATCH'){
+  const token=process.env.BLOB_READ_WRITE_TOKEN||'';
+  if(!token)return res.status(503).json({error:'Blob storage missing'});
+  const body=req.body&&typeof req.body==='object'?req.body:{};
+  const scene=Number(body.scene||0);
+  const update={...body,scene:Number.isFinite(scene)?scene:0,updatedAt:new Date().toISOString()};
+  const path=`mcs/jobs/${id}/progress-${update.scene||0}.json`;
+  await put(path,Buffer.from(JSON.stringify(update)),{access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'});
+  console.log('[preview-scene]',JSON.stringify({id,stage:update.stage||'',status:update.status||'',scene:update.scene||0,provider:update.provider||'',providerJobId:update.providerJobId||''}));
+  return res.status(200).json({ok:true,id,...update});
+}return res.status(405).json({error:'Method not allowed'})}
