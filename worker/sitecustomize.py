@@ -48,11 +48,6 @@ try:
                 "Camera and scenery movement are secondary and may not substitute for body movement. No frozen pose, no hovering, no pan-only or zoom-only shot. "
                 + str(prompt or "")
             )
-            if on_task_created:
-                try:
-                    on_task_created("motion-quality-rerender", retryAttempt=1, priorFailureCode="MCS.MOTION_GATE", priorFailure=str(first_error)[:300])
-                except Exception:
-                    pass
             retry_result = _original_animate(
                 self,
                 source,

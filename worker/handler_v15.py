@@ -7,7 +7,7 @@ import requests, runpod
 from pipeline_steps import build_movie, build_pdf, illustrate, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
 from runway_adapter import RunwayGen4Turbo
 
-BUNDLE_VERSION="2026-08-26-mcs-v16-paid-validation-fixed"
+BUNDLE_VERSION="2026-08-26-mcs-v17-retry-safe-provider-checkpoints"
 
 def req(name):
     v=os.environ.get(name,"").strip()
@@ -55,21 +55,90 @@ def handler(event):
         url=f"{job['assets']['previewScene']}?kind={kind}"+(f"&scene={scene}" if scene else "")
         x=requests.get(url,headers=auth_headers(),timeout=180); x.raise_for_status(); Path(dest).write_bytes(x.content)
 
+    def download_if_present(kind,dest,scene=0):
+        url=f"{job['assets']['previewScene']}?kind={kind}"+(f"&scene={scene}" if scene else "")
+        x=requests.get(url,headers=auth_headers(),timeout=180)
+        if x.status_code==404:return False
+        x.raise_for_status()
+        if not x.content:return False
+        Path(dest).write_bytes(x.content)
+        return True
+
+    def checkpoint_provider(stage,scene,provider,task_id,**retry):
+        task_id=str(task_id or "").strip()
+        if not task_id or task_id=="motion-quality-rerender":return None
+        last_error=None
+        for attempt in range(3):
+            try:
+                return update(stage,scene,"provider_started",provider=provider,providerJobId=task_id,**retry)
+            except Exception as error:
+                last_error=error
+                time.sleep(1+attempt)
+        raise RuntimeError(f"Provider task checkpoint failed for {task_id}: {last_error}")
+
     def render_scene(root,reference,scene,index):
         n=int(scene["sceneNumber"]); image=str(root/f"scene-{n}.png"); narration=str(root/f"narration-{n}.mp3"); sfx=str(root/f"sound-{n}.mp3"); video=str(root/f"scene-{n}.mp4")
-        illustrate(str(reference),scene,image,True,on_task_created=lambda task_id,**retry:update("illustrating",n,"provider_started",provider="runway-gen4-image-turbo",providerJobId=task_id,**retry)); upload("scene-image",image,n,"image/png"); update("illustrating",n,"illustrated")
-        narrate(str(scene["narration"]),narration); upload("narration",narration,n,"audio/mpeg"); update("narrating",n,"narrated")
-        sound_effect(scene,sfx); upload("sound-effect",sfx,n,"audio/mpeg"); update("sound",n,"ready")
-        runway=RunwayGen4Turbo(req("RUNWAY_API_KEY"),10); base_prompt=str(scene.get("visibleAction") or scene.get("description") or scene.get("narration") or "")
         existing=(job.get("existingProviderJobs") or {}).get(str(n)) or {}
-        _,provider_job_id=runway.animate(image,video,base_prompt,existing_task_id=str(existing.get("providerJobId") or "") or None,on_task_created=lambda task_id,**retry:update("animating",n,"provider_started",provider="runway-gen4-turbo",providerJobId=task_id,**retry))
-        try: verify_obvious_clip_motion(video)
-        except Exception as first:
-            update("animating",n,"motion_retry",error=str(first))
-            retry_prompt=base_prompt+" IMPORTANT: the main character must visibly move their whole body across the frame, change position, react, and physically interact with the scene. Do not use scenery-only motion or a mostly static pose."
-            _,provider_job_id=runway.animate(image,video,retry_prompt,existing_task_id=None,on_task_created=lambda task_id,**retry:update("animating",n,"provider_started",provider="runway-gen4-turbo-motion-retry",providerJobId=task_id,**retry))
-            verify_obvious_clip_motion(video)
-        upload("scene-video",video,n,"video/mp4"); update("animating",n,"animated",providerJobId=provider_job_id); runpod.serverless.progress_update(event,f"Scene {index} finished")
+        image_task={"id":str(existing.get("imageProviderJobId") or "")}
+        if not (not preview and download_if_present("scene-image",image,n)):
+            try:
+                illustrate(
+                    str(reference),scene,image,True,
+                    existing_task_id=image_task["id"] or None,
+                    on_task_created=lambda task_id,**retry:(
+                        image_task.update(id=str(task_id)),
+                        checkpoint_provider("illustrating",n,"runway-gen4-image-turbo",task_id,**retry)
+                    )[-1]
+                )
+            except Exception:
+                if image_task["id"]:
+                    try:update("illustrating",n,"provider_failed",provider="runway-gen4-image-turbo",providerJobId=image_task["id"])
+                    except Exception:pass
+                raise
+            upload("scene-image",image,n,"image/png")
+        update("illustrating",n,"illustrated",provider="runway-gen4-image-turbo",providerJobId=image_task["id"])
+        if not (not preview and download_if_present("narration",narration,n)):
+            narrate(str(scene["narration"]),narration); upload("narration",narration,n,"audio/mpeg")
+        update("narrating",n,"narrated")
+        if not (not preview and download_if_present("sound-effect",sfx,n)):
+            sound_effect(scene,sfx); upload("sound-effect",sfx,n,"audio/mpeg")
+        update("sound",n,"ready")
+        if not preview and download_if_present("scene-video",video,n):
+            try:
+                verify_obvious_clip_motion(video)
+                update("animating",n,"animated",provider="runway-gen4-turbo",providerJobId=str(existing.get("animationProviderJobId") or existing.get("providerJobId") or ""))
+                runpod.serverless.progress_update(event,f"Scene {index} reused")
+                return image,narration,sfx,video
+            except Exception:
+                Path(video).unlink(missing_ok=True)
+        runway=RunwayGen4Turbo(req("RUNWAY_API_KEY"),10); base_prompt=str(scene.get("visibleAction") or scene.get("description") or scene.get("narration") or "")
+        animation_task={"id":str(existing.get("animationProviderJobId") or existing.get("providerJobId") or "")}
+        def animation_started(task_id,provider="runway-gen4-turbo",**retry):
+            if str(task_id)=="motion-quality-rerender":return None
+            animation_task["id"]=str(task_id)
+            return checkpoint_provider("animating",n,provider,task_id,**retry)
+        try:
+            _,provider_job_id=runway.animate(
+                image,video,base_prompt,
+                existing_task_id=animation_task["id"] or None,
+                on_task_created=lambda task_id,**retry:animation_started(task_id,**retry)
+            )
+            try:verify_obvious_clip_motion(video)
+            except Exception as first:
+                update("animating",n,"motion_retry",error=str(first))
+                retry_prompt=base_prompt+" IMPORTANT: the main character must visibly move their whole body across the frame, change position, react, and physically interact with the scene. Do not use scenery-only motion or a mostly static pose."
+                _,provider_job_id=runway.animate(
+                    image,video,retry_prompt,
+                    existing_task_id=None,
+                    on_task_created=lambda task_id,**retry:animation_started(task_id,provider="runway-gen4-turbo-motion-retry",**retry)
+                )
+                verify_obvious_clip_motion(video)
+        except Exception:
+            if animation_task["id"]:
+                try:update("animating",n,"provider_failed",provider="runway-gen4-turbo",providerJobId=animation_task["id"])
+                except Exception:pass
+            raise
+        upload("scene-video",video,n,"video/mp4"); update("animating",n,"animated",provider="runway-gen4-turbo",providerJobId=provider_job_id); runpod.serverless.progress_update(event,f"Scene {index} finished")
         return image,narration,sfx,video
 
     try:

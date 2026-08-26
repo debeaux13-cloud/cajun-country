@@ -539,7 +539,13 @@ def plan_story(vision: str, approved_preview: dict, tier: str, opening_manifest:
     return plan
 
 
-def _runway_reference_image(reference_path: str, prompt: str, destination: str, on_task_created=None) -> str:
+def _runway_reference_image(
+    reference_path: str,
+    prompt: str,
+    destination: str,
+    on_task_created=None,
+    existing_task_id: str | None = None,
+) -> str:
     image = Path(reference_path).read_bytes()
     mime = "image/png" if reference_path.lower().endswith(".png") else "image/jpeg"
     reference_uri = f"data:{mime};base64,{base64.b64encode(image).decode('ascii')}"
@@ -570,7 +576,7 @@ def _runway_reference_image(reference_path: str, prompt: str, destination: str, 
             on_task_created(created_task_id, **(retry_evidence or {}))
         return created_task_id
 
-    task_id = create_task()
+    task_id = str(existing_task_id or "").strip() or create_task()
     deadline = time.monotonic() + 12 * 60
     while True:
         if time.monotonic() >= deadline:
@@ -622,7 +628,14 @@ def _runway_reference_image(reference_path: str, prompt: str, destination: str, 
         time.sleep(3)
 
 
-def illustrate(reference_path: str, scene: dict, destination: str, force_runway: bool = False, on_task_created=None) -> str:
+def illustrate(
+    reference_path: str,
+    scene: dict,
+    destination: str,
+    force_runway: bool = False,
+    on_task_created=None,
+    existing_task_id: str | None = None,
+) -> str:
     prompt = (
         "Create one entirely new 16:9 CINEMATIC ANIMATED-FEATURE frame from a blank canvas. Use one consistent semi-realistic stylized film language: dimensional character modeling, believable anatomy and proportions, expressive but natural eyes and face, detailed coat/hair/skin texture, cinematic depth, soft realistic lighting, polished environmental detail, and refined 2D/3D feature-animation rendering. The result must sit clearly between flat cartoon and photorealistic live action. Never use flat children's-TV cartoon shapes, thick crude outlines, rubber-hose anatomy, generic clip-art backgrounds, oil-painting concept art, or raw photorealism. The uploaded photo is an IDENTITY-ONLY reference, never a background, pose, composition, camera-angle, location, leash, lead, or harness reference. "
         "Preserve the exact identity, approximate age, skin tone, hair, adult body size, healthy body condition, coat color, markings, collar and species of every principal subject. Never make a pet thinner, heavier, younger, smaller, larger, or a different color between scenes. "
@@ -637,7 +650,13 @@ def illustrate(reference_path: str, scene: dict, destination: str, force_runway:
         "Show every narrated object clearly, but leave the physical action visibly unfinished. No text, captions, collage, duplicated bodies, disappearing limbs or tail, unrelated characters, or invisible narrated props. Never add commercial logos, branded packaging, sponsorship signage, or product-placement framing."
     )
     if force_runway:
-        return _runway_reference_image(reference_path, prompt, destination, on_task_created)
+        return _runway_reference_image(
+            reference_path,
+            prompt,
+            destination,
+            on_task_created,
+            existing_task_id=existing_task_id,
+        )
     gateway_endpoint = os.environ.get("MCS_GATEWAY_IMAGE_ENDPOINT", "").strip()
     if gateway_endpoint:
         with open(reference_path, "rb") as image:
@@ -659,7 +678,13 @@ def illustrate(reference_path: str, scene: dict, destination: str, force_runway:
             "model": "gpt-image-2", "quality": "medium", "size": "1536x1024", "output_format": "png", "n": "1", "prompt": prompt,
         }, timeout=240)
     if response.status_code == 429:
-        return _runway_reference_image(reference_path, prompt, destination, on_task_created)
+        return _runway_reference_image(
+            reference_path,
+            prompt,
+            destination,
+            on_task_created,
+            existing_task_id=existing_task_id,
+        )
     response.raise_for_status()
     encoded = response.json().get("data", [{}])[0].get("b64_json")
     if not encoded:
