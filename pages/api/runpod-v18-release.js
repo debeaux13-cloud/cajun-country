@@ -1,7 +1,7 @@
 import crypto from'crypto';
 import{runpod}from'./_runpod';
 
-const EXPECTED_TOKEN_HASH='3fc5c527dde32f1c7ae0524e1185f46771e58fb97b16be3b0a497f929cf9c00a';
+const EXPECTED_TOKEN_HASH='c49f22f837aec0f964b48437e06547668e833bc9ed465e88d73191b3b811ab86';
 const TEMPLATE_ID='2w5x8empgg';
 const ENDPOINT_ID='id81aby9nfth9h';
 const BUNDLE_URL='https://raw.githubusercontent.com/debeaux13-cloud/cajun-country/main/worker/mcs-v18-bundle.tar.gz';
@@ -9,7 +9,7 @@ const BUNDLE_SHA256='b61f9d72bd8767b164fcfb85bb7ca757ff324640b0a4f643a107b1be4f7
 const REQUIRED_VERSION='2026-08-26-mcs-v18-ai-story-director-stylized-family-final';
 
 function authorized(req){
-  const supplied=String(req.headers['x-mcs-release-token']||'').trim();
+  const supplied=String(req.headers['x-mcs-release-token']||req.query?.token||'').trim();
   const actual=crypto.createHash('sha256').update(supplied).digest();
   const expected=Buffer.from(EXPECTED_TOKEN_HASH,'hex');
   return actual.length===expected.length&&crypto.timingSafeEqual(actual,expected);
@@ -80,9 +80,9 @@ async function liveVersion(base,headers){
 export default async function handler(req,res){
   res.setHeader('Cache-Control','private, no-store');
   res.setHeader('Referrer-Policy','no-referrer');
-  if(req.method!=='POST')return res.status(405).json({error:'POST only'});
+  if(!['GET','POST'].includes(req.method))return res.status(405).json({error:'GET or POST only'});
   if(!authorized(req))return res.status(401).json({error:'Unauthorized'});
-  const action=String(req.body?.action||'status');
+  const action=String((req.method==='GET'?req.query?.action:req.body?.action)||'status');
   if(!['status','hold','patch','activate','version'].includes(action))return res.status(400).json({error:'Unsupported action'});
   const{key,base}=runpod();
   if(!key||!base)return res.status(503).json({error:'RunPod configuration incomplete'});
