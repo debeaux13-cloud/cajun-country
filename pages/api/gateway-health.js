@@ -1,0 +1,1 @@
+export default function handler(req,res){const hasFundedGatewayKey=!!process.env.AI_GATEWAY_API_KEY;res.status(hasFundedGatewayKey?200:503).json({ok:hasFundedGatewayKey,fundedGatewayKeyPresent:hasFundedGatewayKey,provider:'vercel-ai-gateway'});}
