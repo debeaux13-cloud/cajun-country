@@ -159,46 +159,87 @@ export default function Create(){
     }catch(error){previewRequest.current=false;setStatus(error.message);setBusy(false)}
   }
 
-  return <main style={{minHeight:'100vh',background:'#120f18',color:'#fff',fontFamily:'Arial,sans-serif'}}>
-    <div style={{maxWidth:980,margin:'0 auto',padding:20}}>
-      <header style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'center',flexWrap:'wrap'}}>
+  return <main className='createPage' style={{minHeight:'100vh',background:'#120f18',color:'#fff',fontFamily:'Arial,sans-serif'}}>
+    <div className='createShell' style={{maxWidth:980,margin:'0 auto',padding:20}}>
+      <header className='createHeader' style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'center',flexWrap:'wrap'}}>
         <a href='/' style={{color:'#fff'}}>← Main Character Studios by Tiffani</a>
         <a href='/my-orders' style={{color:'#fff',fontWeight:900}}>My Orders</a>
       </header>
-      <div style={{marginTop:26,padding:'10px 14px',display:'inline-flex',gap:12,alignItems:'center',borderRadius:999,background:'#24182f',border:'1px solid #5c4470'}}><span>3-minute movie</span><strong>$49</strong></div>
-      <h1 style={{fontFamily:'Georgia,serif',fontSize:'clamp(40px,7vw,70px)',marginBottom:8}}>Make them the main character.</h1>
-      <p style={{fontSize:18,opacity:.85}}>AI Story Chat included · 3-minute personalized moving movie · first 60 seconds free</p>
-      <section style={{marginTop:24,background:'#19121f',border:'1px solid #3d2d49',borderRadius:24,padding:20}}>
-        <div style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>STAGE · YOUR AI STORY PARTNER · INCLUDED</b><div style={{opacity:.7}}>Add a photo, choose one vibe, and optionally share anything from a tiny idea to a whole story. Stage writing uses no video credits.</div></div></div>
+      <div className='pricePill' style={{marginTop:26,padding:'10px 14px',display:'inline-flex',gap:12,alignItems:'center',borderRadius:999,background:'#24182f',border:'1px solid #5c4470'}}><span>3-minute movie</span><strong>$49</strong></div>
+      <h1 className='createTitle' style={{fontFamily:'Georgia,serif',fontSize:'clamp(40px,7vw,70px)',marginBottom:8}}>Make them the main character.</h1>
+      <p className='createSubtitle' style={{fontSize:18,opacity:.85}}>AI Story Chat included · 3-minute personalized moving movie · first 60 seconds free</p>
+      <section className='createCard' style={{marginTop:24,background:'#19121f',border:'1px solid #3d2d49',borderRadius:24,padding:20}}>
+        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>STAGE · YOUR AI STORY PARTNER · INCLUDED</b><div style={{opacity:.7}}>Add a photo, choose one vibe, and optionally share anything from a tiny idea to a whole story. Stage writing uses no video credits.</div></div></div>
 
         <div style={{margin:'18px 0'}}>
           <label style={{display:'block',fontWeight:800,marginBottom:8}}>Add one clear photo of the person, pet, family, or group starring in the movie</label>
           <div style={{fontSize:14,opacity:.72,marginBottom:8}}>Group photos are welcome. Up to 12 people and animals can be identified separately. Everyday phone pictures and screenshots are welcome—no studio setup, full-body pose, or eye contact required.</div>
-          <div role='note' style={{fontSize:14,fontWeight:800,lineHeight:1.45,margin:'10px 0',padding:'11px 13px',borderRadius:12,color:'#fff4cf',background:'#4a3512',border:'1px solid #d6a33b'}}>Photo quality matters: AI can only preserve features it can clearly see. Blurry, dark, cropped, distant/tiny, or obstructed people and pets may not match, so choose a clearer photo before continuing.</div>
-          <input type='file' disabled={busy||checkingPhoto} accept='image/jpeg,image/png,image/webp,image/heic,image/heif' onChange={file}/>{checkingPhoto&&<span style={{marginLeft:10}}>Checking photo…</span>}{image&&!checkingPhoto&&<span style={{marginLeft:10}}>✓ photo prepared</span>}
+          <div className='photoNote' role='note' style={{fontSize:14,fontWeight:800,lineHeight:1.45,margin:'10px 0',padding:'11px 13px',borderRadius:12,color:'#fff4cf',background:'#4a3512',border:'1px solid #d6a33b'}}>Photo quality matters: AI can only preserve features it can clearly see. Blurry, dark, cropped, distant/tiny, or obstructed people and pets may not match, so choose a clearer photo before continuing.</div>
+          <input className='photoInput' type='file' disabled={busy||checkingPhoto} accept='image/jpeg,image/png,image/webp,image/heic,image/heif' onChange={file}/>{checkingPhoto&&<span style={{marginLeft:10}}>Checking photo…</span>}{image&&!checkingPhoto&&<span style={{marginLeft:10}}>✓ photo prepared</span>}
           {photoCheck&&<div role={photoCheck.status==='retry_required'?'alert':'status'} style={{marginTop:12,padding:'12px 14px',borderRadius:14,lineHeight:1.45,border:`1px solid ${photoCheck.status==='good'?'#4cc38a':photoCheck.status==='caution'?'#d6a33b':'#ff6b6b'}`,background:photoCheck.status==='good'?'#153d2b':photoCheck.status==='caution'?'#4a3512':'#4a1d25'}}><strong>{photoCheck.status==='good'?'✓ This photo is usable':photoCheck.status==='caution'?'This photo is usable—with a heads-up':'Please try another photo'}</strong>{photoCheck.visiblePrincipalSubjectCount>0&&<span> · {photoCheck.visiblePrincipalSubjectCount} principal {photoCheck.visiblePrincipalSubjectCount===1?'subject':'subjects'} visible</span>}<div>{photoCheck.reason}</div><div style={{opacity:.82}}>{photoCheck.tip}</div></div>}
         </div>
 
-        <fieldset disabled={busy} style={{border:0,padding:0,margin:'18px 0'}}><legend style={{fontWeight:800,marginBottom:8}}>Choose one vibe</legend><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{VIBES.map(option=><button type='button' key={option.value} aria-pressed={vibe===option.value} onClick={()=>chooseVibe(option.value)} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,background:vibe===option.value?'#7b2cff':'#2b2135',color:'#fff',border:vibe===option.value?'2px solid #b994ff':'1px solid #5c4470'}}>{option.label}</button>)}</div></fieldset>
+        <fieldset className='vibePicker' disabled={busy} style={{border:0,padding:0,margin:'18px 0'}}><legend style={{fontWeight:800,marginBottom:8}}>Choose one vibe</legend><div className='vibeButtons' style={{display:'flex',gap:8,flexWrap:'wrap'}}>{VIBES.map(option=><button className='vibeButton' type='button' key={option.value} aria-pressed={vibe===option.value} onClick={()=>chooseVibe(option.value)} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,background:vibe===option.value?'#7b2cff':'#2b2135',color:'#fff',border:vibe===option.value?'2px solid #b994ff':'1px solid #5c4470'}}>{option.label}</button>)}</div></fieldset>
 
         <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>Optional: add an idea or paste a whole story</label>
-        <textarea id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} placeholder='Leave blank and Stage will invent it, type a short theme, paste messy kid writing, or add your complete story.' style={{width:'100%',minHeight:130,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
+        <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} placeholder='Leave blank and Stage will invent it, type a short theme, paste messy kid writing, or add your complete story.' style={{width:'100%',minHeight:130,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
 
-        {!drafts.length&&draftsUsed<3&&<button disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating Draft…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>}
-        <p style={{minHeight:24}}>{status}</p>
+        {!drafts.length&&draftsUsed<3&&<button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating Draft…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>}
+        <p className='statusLine' style={{minHeight:24}}>{status}</p>
         {!drafts.length&&draftsUsed>=3&&<p style={{padding:12,borderRadius:12,background:'#2b2135'}}>All 3 Stage text drafts have been used in this page session.</p>}
         {selectedDraft&&<>
           <h3>Choose your favorite Stage draft</h3>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{drafts.map((draft,index)=><button type='button' disabled={busy} key={`${draft.attempt}-${index}`} onClick={()=>setSelectedDraftIndex(index)} aria-pressed={index===selectedDraftIndex} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,color:'#fff',background:index===selectedDraftIndex?'#7b2cff':'#2b2135',border:'1px solid #5c4470'}}>Draft {draft.attempt}/3</button>)}</div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{drafts.map((draft,index)=><button className='draftButton' type='button' disabled={busy} key={`${draft.attempt}-${index}`} onClick={()=>setSelectedDraftIndex(index)} aria-pressed={index===selectedDraftIndex} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,color:'#fff',background:index===selectedDraftIndex?'#7b2cff':'#2b2135',border:'1px solid #5c4470'}}>Draft {draft.attempt}/3</button>)}</div>
           <h3>Draft {selectedDraft.attempt}/3 · Your editable 3-minute plan</h3>
           <p style={{opacity:.78}}>Make it yours before previewing. For example: “change the horse to a unicorn,” rewrite dialogue, or adjust any event.</p>
-          <textarea disabled={busy} value={selectedDraft.plan} onChange={event=>changeSelectedPlan(event.target.value)} style={{width:'100%',minHeight:360,padding:14,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box'}}/>
-          {draftsUsed<3&&<button disabled={busy} onClick={stage} style={{marginTop:12,padding:'12px 18px',borderRadius:999,fontWeight:900}}>{busy?'Writing another text draft…':'Try another story'}</button>}
+          <textarea className='storyInput planInput' disabled={busy} value={selectedDraft.plan} onChange={event=>changeSelectedPlan(event.target.value)} style={{width:'100%',minHeight:360,padding:14,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box'}}/>
+          {draftsUsed<3&&<button className='secondaryButton' disabled={busy} onClick={stage} style={{marginTop:12,padding:'12px 18px',borderRadius:999,fontWeight:900}}>{busy?'Writing another text draft…':'Try another story'}</button>}
           {draftsUsed>=3&&<p style={{opacity:.76}}>You have all 3 text drafts. Select the one you like best and edit it as much as you want.</p>}
           <p style={{opacity:.72}}>These three choices are text-only and use no video or Runway credits. Your selected draft gets one free moving 60-second preview; after payment, that same story continues through scenes 7–18.</p>
-          <button disabled={busy||!photoCheck?.previewEntitlement} onClick={preview} style={{marginTop:8,padding:'15px 22px',borderRadius:999,fontWeight:900}}>Make my one free moving preview →</button>
+          <button className='previewButton' disabled={busy||!photoCheck?.previewEntitlement} onClick={preview} style={{marginTop:8,padding:'15px 22px',borderRadius:999,fontWeight:900}}>Make my one free moving preview →</button>
         </>}
       </section>
     </div>
+    <style jsx global>{`
+      *{box-sizing:border-box}
+      html,body{margin:0;max-width:100%;overflow-x:hidden}
+      .createPage{background:#fbf1ea!important;color:#24152e!important}
+      .createShell{padding:24px!important}
+      .createHeader a{color:#5b267d!important;font-weight:800;text-decoration:none}
+      .pricePill{background:#fff!important;border:1px solid #eadbe9!important;box-shadow:0 10px 28px rgba(61,35,73,.08)}
+      .createTitle{line-height:1!important;letter-spacing:-1.5px}
+      .createSubtitle{color:#6f6378!important;opacity:1!important}
+      .createCard{background:#fff!important;border:1px solid #eadbe9!important;box-shadow:0 24px 65px rgba(67,36,78,.12);padding:28px!important}
+      .stageIntro{padding:18px;border-radius:20px;background:linear-gradient(135deg,#f8e3e7,#eee0f8);align-items:flex-start!important}
+      .stageIntro>div:last-child>div{color:#6f6378;opacity:1!important;margin-top:4px;line-height:1.45}
+      .aiBadge{background:linear-gradient(135deg,#ef5e72,#8c2bb6)!important;color:#fff;flex:0 0 42px}
+      .photoNote{color:#6b4b05!important;background:#fff7dc!important;border-color:#e8bf4f!important}
+      .photoInput{display:block;width:100%;padding:12px;border:1px solid #ddcde1;border-radius:16px;background:#fffaf7;color:#24152e;font:inherit}
+      .photoInput::file-selector-button{border:0;border-radius:999px;padding:10px 16px;margin-right:12px;background:#f0e4f5;color:#5b267d;font-weight:900;cursor:pointer}
+      .vibeButtons{gap:10px!important}
+      .vibeButton{color:#24152e!important;background:#f7eef8!important;border:1px solid #d8c1e2!important;min-height:44px}
+      .vibeButton[aria-pressed="true"]{color:#fff!important;background:linear-gradient(135deg,#ef5e72,#8c2bb6)!important;border-color:transparent!important;box-shadow:0 8px 20px rgba(122,42,184,.2)}
+      .storyInput{width:100%!important;border:1px solid #ddcde1!important;background:#fffaf7!important;color:#24152e!important;line-height:1.55;resize:vertical}
+      .storyInput::placeholder{color:#8a7c90}
+      .primaryButton,.previewButton{border:0!important;color:#fff!important;background:linear-gradient(135deg,#ef5e72,#ef4b8c 45%,#8c2bb6)!important;box-shadow:0 12px 28px rgba(178,52,137,.22);cursor:pointer;font-size:16px}
+      .secondaryButton,.draftButton{color:#5b267d!important;background:#f5eaf8!important;border:1px solid #d8c1e2!important;cursor:pointer}
+      .draftButton[aria-pressed="true"]{color:#fff!important;background:#7a2ab8!important}
+      button:disabled{opacity:.52;cursor:not-allowed!important}
+      .statusLine{color:#5b267d;font-weight:800;line-height:1.45}
+      .planInput{min-height:420px!important}
+      @media(max-width:640px){
+        .createShell{padding:16px!important}
+        .createHeader{align-items:flex-start!important}
+        .createTitle{font-size:46px!important;margin-top:24px!important}
+        .createSubtitle{font-size:17px!important;line-height:1.5}
+        .createCard{padding:18px!important;border-radius:22px!important}
+        .stageIntro{display:block!important}
+        .aiBadge{margin-bottom:12px}
+        .vibeButtons{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))}
+        .vibeButton{width:100%}
+        .primaryButton,.previewButton,.secondaryButton{display:block;width:100%;min-height:52px}
+        .photoInput{padding:10px}
+      }
+    `}</style>
   </main>
 }
