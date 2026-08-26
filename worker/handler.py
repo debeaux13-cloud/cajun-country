@@ -1,4 +1,4 @@
-"""RunPod Tier-1 worker for Main Character Studios production previews and paid continuation."""
+"""RunPod Tier-1 worker for Main Character Studios $49 production flow."""
 from __future__ import annotations
 
 import os
@@ -15,8 +15,6 @@ from pipeline_steps import (
     illustrate,
     narrate,
     sound_effect,
-    plan_preview_story,
-    plan_story,
     validate_story_plan,
     validate_unique_scene_images,
     verify_movie,
@@ -24,7 +22,7 @@ from pipeline_steps import (
 )
 from runway_adapter import RunwayGen4Turbo
 
-BUNDLE_VERSION = "2026-08-26-frontdoor-v13"
+BUNDLE_VERSION = "2026-08-26-mcs-49-three-minute-v14"
 
 
 def _required(name: str) -> str:
@@ -43,13 +41,17 @@ def _headers(content_type: str | None = None) -> dict[str, str]:
 
 def handler(event):
     payload = event.get("input") or event
-    action = str(payload.get("action") or "")
-    if action == "version":
+    if str(payload.get("action") or "") == "version":
         return {
             "status": "ready",
             "bundleVersion": BUNDLE_VERSION,
-            "previewImageProvider": "runway-gen4-image-turbo",
+            "product": "$49 / 3 minutes / 18 scenes",
+            "previewScenes": 6,
+            "paidContinuationScenes": 12,
             "previewSceneReuseAfterPayment": True,
+            "directBlobUploads": True,
+            "soundEffects": True,
+            "backgroundMusic": True,
         }
 
     supplied_worker_secret = str(payload.get("workerSecret") or "").strip()
@@ -80,20 +82,16 @@ def handler(event):
     os.environ["ELEVENLABS_API_KEY"] = str(providers.get("elevenLabsApiKey") or "")
     os.environ["ELEVENLABS_VOICE_ID"] = str(providers.get("elevenLabsVoiceId") or "")
     os.environ["ELEVENLABS_MODEL_ID"] = str(providers.get("elevenLabsModelId") or "eleven_flash_v2_5")
+    for name in ("RUNWAY_API_KEY", "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID"):
+        _required(name)
 
-    for required_provider in ("RUNWAY_API_KEY", "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID"):
-        _required(required_provider)
-
-    tier = str(job.get("tier") or "premium_full_motion")
-    if tier not in {"signature_human", "standard_hybrid", "premium_full_motion"}:
-        raise ValueError("This worker accepts Main Character Studios production orders only.")
     if job.get("contract", {}).get("petRouting") != "runway-gen4-turbo-only":
-        raise ValueError("Tier-1 movie scenes must route through Runway Gen-4 Turbo.")
+        raise ValueError("Every MCS scene must route through Runway Gen-4 Turbo.")
     if job.get("contract", {}).get("animalPoseDetection") is not False:
         raise ValueError("Animal pose detection must remain disabled for this tier.")
 
-    scene_count = int(job.get("contract", {}).get("scenes") or (6 if preview_mode else 30))
-    movie_seconds = int(job.get("contract", {}).get("movieSeconds") or (60 if preview_mode else 300))
+    scene_count = int(job.get("contract", {}).get("scenes") or (6 if preview_mode else 18))
+    movie_seconds = int(job.get("contract", {}).get("movieSeconds") or (60 if preview_mode else 180))
 
     def update(stage: str, scene: int = 0, status: str = "running", **extra):
         body = {"stage": stage, "status": status, **extra}
@@ -104,17 +102,35 @@ def handler(event):
         return r.json()
 
     def upload(kind: str, path: str, scene: int = 0, content_type: str = "application/octet-stream"):
+        data = Path(path).read_bytes()
+        ticket_url = f"{callback_base}/api/internal/pipeline/jobs/{job_id}/upload-ticket"
+        ticket = requests.post(
+            ticket_url,
+            headers=_headers("application/json"),
+            json={"kind": kind, "scene": scene or "", "contentType": content_type, "size": len(data)},
+            timeout=30,
+        )
+        if ticket.ok:
+            presigned = str((ticket.json() or {}).get("presignedUrl") or "")
+            if presigned:
+                sent = requests.put(presigned, headers={"Content-Type": content_type}, data=data, timeout=600)
+                sent.raise_for_status()
+                return
+        # Small-file compatibility fallback only. Never send a large MP4 through
+        # a Vercel Function because the platform body limit will return 413.
+        if len(data) > 4_000_000:
+            raise RuntimeError(f"Direct Blob upload ticket failed for {kind} ({ticket.status_code}): {ticket.text[:500]}")
         headers = {**_headers(content_type), "x-mcs-asset-kind": kind}
         if scene:
             headers["x-mcs-scene"] = str(scene)
-        r = requests.put(job["assets"]["upload"], headers=headers, data=Path(path).read_bytes(), timeout=180)
-        r.raise_for_status()
+        fallback = requests.put(job["assets"]["upload"], headers=headers, data=data, timeout=180)
+        fallback.raise_for_status()
 
     def download(kind: str, destination: str, scene: int = 0):
         url = f"{job['assets']['previewScene']}?kind={kind}"
         if scene:
             url += f"&scene={scene}"
-        r = requests.get(url, headers=_headers(), timeout=120)
+        r = requests.get(url, headers=_headers(), timeout=180)
         r.raise_for_status()
         Path(destination).write_bytes(r.content)
 
@@ -141,49 +157,38 @@ def handler(event):
         scene_step(
             "illustrating",
             number,
-            lambda s=scene, p=image_path: illustrate(
-                str(reference),
-                s,
-                p,
-                True,
+            lambda: illustrate(
+                str(reference), scene, image_path, True,
                 on_task_created=lambda task_id, **retry: update(
-                    "illustrating",
-                    number,
-                    "provider_started",
-                    provider="runway-gen4-image-turbo",
-                    providerJobId=task_id,
-                    **retry,
+                    "illustrating", number, "provider_started",
+                    provider="runway-gen4-image-turbo", providerJobId=task_id, **retry,
                 ),
             ),
         )
         upload("scene-image", image_path, number, "image/png")
         update("illustrating", number, "illustrated")
 
-        scene_step("narrating", number, lambda s=scene, p=narration_path: narrate(str(s["narration"]), p))
+        scene_step("narrating", number, lambda: narrate(str(scene["narration"]), narration_path))
         upload("narration", narration_path, number, "audio/mpeg")
         update("narrating", number, "narrated")
 
-        scene_step("sound", number, lambda s=scene, p=sound_path: sound_effect(s, p))
+        scene_step("sound", number, lambda: sound_effect(scene, sound_path))
         upload("sound-effect", sound_path, number, "audio/mpeg")
         update("sound", number, "ready")
 
-        existing = (job.get("existingProviderJobs") or {}).get(str(number)) or {}
         runway = RunwayGen4Turbo(_required("RUNWAY_API_KEY"), 10)
+        existing = (job.get("existingProviderJobs") or {}).get(str(number)) or {}
         _, provider_job_id = scene_step(
             "animating",
             number,
-            lambda s=scene, p=video_path, e=existing: runway.animate(
+            lambda: runway.animate(
                 image_path,
-                p,
-                str(s.get("visibleAction") or s.get("description") or s.get("narration") or ""),
-                existing_task_id=str(e.get("providerJobId") or "") or None,
+                video_path,
+                str(scene.get("visibleAction") or scene.get("description") or scene.get("narration") or ""),
+                existing_task_id=str(existing.get("providerJobId") or "") or None,
                 on_task_created=lambda task_id, **retry: update(
-                    "animating",
-                    number,
-                    "provider_started",
-                    provider="runway-gen4-turbo",
-                    providerJobId=task_id,
-                    **retry,
+                    "animating", number, "provider_started",
+                    provider="runway-gen4-turbo", providerJobId=task_id, **retry,
                 ),
             ),
         )
@@ -203,18 +208,8 @@ def handler(event):
                 reference.write_bytes(source.content)
 
                 manifest = job.get("existingManifest") or {}
-                if not manifest:
-                    update("planning")
-                    purchased_scene_count = 30 if tier == "premium_full_motion" else 18
-                    manifest = plan_preview_story(
-                        str(job.get("vision") or ""),
-                        job.get("approvedPreview") or {},
-                        purchased_scene_count,
-                    )
-                    update("planning", manifest=manifest)
                 validate_story_plan(manifest, 6, 1)
                 scenes = list(manifest.get("scenes") or [])
-
                 rendered = [None] * 6
                 with ThreadPoolExecutor(max_workers=6) as executor:
                     futures = {
@@ -232,14 +227,7 @@ def handler(event):
 
                 update("assembling")
                 movie_path = str(root / "preview.mp4")
-                build_movie(
-                    videos,
-                    narrations,
-                    folder,
-                    movie_path,
-                    60,
-                    sound_effect_paths=sounds,
-                )
+                build_movie(videos, narrations, folder, movie_path, 60, sound_effect_paths=sounds)
                 verify_movie(movie_path, 60)
                 upload("preview-movie", movie_path, content_type="video/mp4")
                 update("ready", status="ready", manifest=manifest)
@@ -260,22 +248,10 @@ def handler(event):
             reference.write_bytes(source.content)
 
             manifest = job.get("existingManifest") or {}
-            current_scenes = list(manifest.get("scenes") or [])
-            if len(current_scenes) not in {6, scene_count}:
-                opening = job.get("openingManifest") or (manifest if len(current_scenes) == 6 else {})
-                if not (os.environ.get("AI_GATEWAY_API_KEY", "").strip() or os.environ.get("OPENAI_API_KEY", "").strip()):
-                    raise RuntimeError("Paid continuation needs the saved full manifest or AI Gateway authentication.")
-                update("planning")
-                manifest = plan_story(
-                    str(job.get("vision") or ""),
-                    job.get("approvedPreview") or {},
-                    tier,
-                    opening,
-                    scene_count,
-                )
-                update("planning", manifest=manifest)
             validate_story_plan(manifest, scene_count)
             scenes = list(manifest.get("scenes") or [])
+            if scene_count != 18 or movie_seconds != 180:
+                raise ValueError("Live paid MCS product must be exactly 18 scenes / 180 seconds.")
 
             rendered = [None] * scene_count
             for index, scene in enumerate(scenes[:6], start=1):
@@ -295,11 +271,10 @@ def handler(event):
                     ) from error
                 rendered[index - 1] = (image_path, narration_path, sound_path, video_path)
 
-            remaining = scenes[6:]
             with ThreadPoolExecutor(max_workers=6) as executor:
                 futures = {
                     executor.submit(render_scene, root, reference, scene, index): index - 1
-                    for index, scene in enumerate(remaining, start=7)
+                    for index, scene in enumerate(scenes[6:], start=7)
                 }
                 for future in as_completed(futures):
                     rendered[futures[future]] = future.result()
@@ -312,15 +287,8 @@ def handler(event):
 
             update("assembling")
             movie_path = str(root / "story-video.mp4")
-            build_movie(
-                videos,
-                narrations,
-                folder,
-                movie_path,
-                movie_seconds,
-                sound_effect_paths=sounds,
-            )
-            verify_movie(movie_path, movie_seconds)
+            build_movie(videos, narrations, folder, movie_path, 180, sound_effect_paths=sounds)
+            verify_movie(movie_path, 180)
             upload("final-movie", movie_path, content_type="video/mp4")
 
             update("verifying")
@@ -328,13 +296,13 @@ def handler(event):
             build_pdf(manifest, images, pdf_path)
             upload("storybook-pdf", pdf_path, content_type="application/pdf")
             update("ready", status="ready", manifest=manifest)
-            return {"jobId": job_id, "status": "ready", "tier": tier, "completed": scene_count}
+            return {"jobId": job_id, "status": "ready", "tier": "three_minute", "completed": 18, "movieSeconds": 180}
     except Exception as error:
         try:
             update("manual_review", status="failed", error=str(error))
         except Exception:
             pass
-        return {"jobId": job_id, "status": "manual_review", "tier": tier, "error": str(error)}
+        return {"jobId": job_id, "status": "manual_review", "tier": "three_minute", "error": str(error)}
 
 
 if __name__ == "__main__":
