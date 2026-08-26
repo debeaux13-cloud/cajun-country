@@ -16,6 +16,7 @@ export default function Preview(){
   const [paying,setPaying]=useState(false);
   const [elapsed,setElapsed]=useState(0);
   const [checkedAt,setCheckedAt]=useState(null);
+  const [production,setProduction]=useState(null);
 
   useEffect(()=>{
     if(!jobId)return;
@@ -60,6 +61,25 @@ export default function Preview(){
     return()=>{stopped=true;clearTimeout(timer)};
   },[jobId]);
 
+  useEffect(()=>{
+    if(!mcsJobId)return;
+    let stopped=false;
+    let timer;
+    async function checkProduction(){
+      try{
+        const response=await fetch('/api/preview-progress?mcsJobId='+encodeURIComponent(mcsJobId),{cache:'no-store'});
+        const next=await response.json();
+        if(!stopped&&response.ok){
+          setProduction(next);
+          if(next.message&&String(job?.status||'').toUpperCase()!=='COMPLETED')setMessage(next.message);
+        }
+      }catch{}
+      if(!stopped)timer=setTimeout(checkProduction,3000);
+    }
+    checkProduction();
+    return()=>{stopped=true;clearTimeout(timer)};
+  },[mcsJobId,job?.status]);
+
   async function checkout(){
     setPaying(true);
     try{
@@ -76,12 +96,14 @@ export default function Preview(){
   const working=!completed&&!failed;
   const videoUrl=completed&&mcsJobId?'/api/preview-media?id='+encodeURIComponent(mcsJobId):job?.videoUrl||null;
   const done=completed&&videoUrl;
-  const numericProgress=typeof job?.progress==='number'?Math.max(0,Math.min(100,job.progress)):null;
+  const numericProgress=typeof production?.progress==='number'?Math.max(0,Math.min(100,production.progress)):typeof job?.progress==='number'?Math.max(0,Math.min(100,job.progress)):null;
   const productionLabel=useMemo(()=>{
     if(status==='IN_QUEUE')return 'Waiting for the movie studio';
+    if(production?.completedScenes>0)return production.completedScenes+' of 6 scenes finished';
+    if(production?.activeScenes>0)return 'Building '+production.activeScenes+' movie scenes';
     if(status==='IN_PROGRESS')return elapsed<45?'Preparing the cast and scenes':'Rendering your moving story';
     return 'Connecting to the movie studio';
-  },[status,elapsed]);
+  },[status,elapsed,production]);
 
   return <main className='page'>
     <div className='shell'>
