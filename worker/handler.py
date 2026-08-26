@@ -5,10 +5,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import requests, runpod
 from audio_polish import add_background_music
-from pipeline_steps import build_movie, build_pdf, illustrate, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
+from pipeline_steps import build_movie, build_pdf, illustrate, locked_motion_scene_prompt, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
 from runway_adapter import RunwayGen4Turbo
 
-BUNDLE_VERSION="2026-08-26-mcs-v18-photo-identity-and-style-lock"
+BUNDLE_VERSION="2026-08-26-mcs-v18-photo-identity-3d-cgi-video-lock"
 
 def req(name):
     v=os.environ.get(name,"").strip()
@@ -114,7 +114,7 @@ def handler(event):
                 return image,narration,sfx,video
             except Exception:
                 Path(video).unlink(missing_ok=True)
-        runway=RunwayGen4Turbo(req("RUNWAY_API_KEY"),10); base_prompt=str(scene.get("visibleAction") or scene.get("description") or scene.get("narration") or "")
+        runway=RunwayGen4Turbo(req("RUNWAY_API_KEY"),10); base_prompt=locked_motion_scene_prompt(scene)
         animation_task={"id":str(existing.get("animationProviderJobId") or existing.get("providerJobId") or "")}
         def animation_started(task_id,provider="runway-gen4-turbo",**retry):
             if str(task_id)=="motion-quality-rerender":return None
@@ -129,7 +129,7 @@ def handler(event):
             try:verify_obvious_clip_motion(video)
             except Exception as first:
                 update("animating",n,"motion_retry",error=str(first))
-                retry_prompt=base_prompt+" IMPORTANT: the main character must visibly move their whole body across the frame, change position, react, and physically interact with the scene. Do not use scenery-only motion or a mostly static pose."
+                retry_prompt="STRONG FULL-BODY MOTION RETRY: hero visibly changes position, reacts, and interacts; no scenery-only motion or static pose. "+base_prompt
                 _,provider_job_id=runway.animate(
                     image,video,retry_prompt,
                     existing_task_id=None,

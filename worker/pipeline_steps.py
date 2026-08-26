@@ -555,13 +555,21 @@ def locked_still_prompt(scene: dict) -> str:
     supporting = _compact_prompt_value(", ".join(scene.get("supportingCharacters") or []), 30)
     prompt = (
         f"@Subject is the exact uploaded hero. IDENTITY LOCK: {identity}. "
-        "STYLE LOCK: stylized 3D CGI animated-movie rendering: digital-sculpture weight, curved volume and depth; soft environmental light, subtle coat or skin highlights; form defined by light and shadow, not hard outlines. "
-        "Modern not-quite-realistic feature animation: neither photoreal/live-action nor flat 2D/vector cartoon. "
+        "STYLE LOCK: warm stylized 3D CGI animated-movie rendering: rounded digital-sculpture forms, clear weight and volume, appealing simplified faces, tactile hair/fur/fabric, soft light, gentle highlights, shallow cinematic depth. "
+        "Curved form through light and shadow, no hard outlines. Not-quite-realistic: neither photoreal/live-action nor flat 2D/vector cartoon. "
         f"SCENE: {setting}. ACTION: {action}. MUST SHOW: {required}. SUPPORTING: {supporting or 'only those named in the scene'}. "
         "New 16:9 composition. Preserve exact build, colors, markings, face or muzzle, ears and tail. "
         "Bodies stay separate. No generic substitute, invented anatomy, source background, leash, text, logo, collage, or duplicate."
     )
     return prompt[:1000].rstrip()
+
+
+def locked_motion_scene_prompt(scene: dict) -> str:
+    """Give video generation the scene performance in chronological order."""
+    action = _compact_prompt_value(scene.get("visibleAction") or scene.get("description"), 100)
+    beats = _compact_prompt_value("; ".join(scene.get("motionBeats") or []), 150)
+    camera = _compact_prompt_value(scene.get("camera"), 30)
+    return f"ACTION: {action}. TIMED BEATS: {beats}. CAMERA: {camera}."[:310].rstrip()
 
 
 def _runway_reference_image(

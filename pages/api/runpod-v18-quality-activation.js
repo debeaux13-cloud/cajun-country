@@ -7,9 +7,9 @@ const TEMPLATE_ID='2w5x8empgg';
 const ENDPOINT_ID='id81aby9nfth9h';
 const MCS_JOB_ID='25a1184e-8887-4ada-a33d-b24a67583bbc';
 const BUNDLE_URL='https://raw.githubusercontent.com/debeaux13-cloud/cajun-country/main/worker/mcs-v18-bundle.tar.gz';
-const BUNDLE_SHA256='64c1a9aebb5d4c6cba27bf35e370dd8750daa566861418079f98b2697f0c3ce7';
+const BUNDLE_SHA256='becd5105504f118b8b64c99ae1cc2d51eb08aaa8657df37d926bfbd595a1c004';
 const PROBE_MARKER='mcs/control/v18-remi-identity-probe-dispatched.json';
-const REQUIRED_VERSION='2026-08-26-mcs-v18-photo-identity-and-style-lock';
+const REQUIRED_VERSION='2026-08-26-mcs-v18-photo-identity-3d-cgi-video-lock';
 const REMI_IDENTITY='Remi: chocolate/rust Doberman Pinscher; lean athletic adult, deep chest; short smooth coat; wedge head/tapered muzzle; amber eyes; cropped ears, one softer; docked nub tail, never long. Never a Golden Retriever.';
 
 function authorized(req){
@@ -132,7 +132,7 @@ export default async function handler(req,res){
     const versionPayload=await liveVersion(base,headers);
     const versionOutput=versionPayload?.output||{};
     if(action==='version')return res.status(200).json({ok:true,phase:'version',runpodStatus:versionPayload?.status||'',output:versionOutput});
-    if(versionOutput?.bundleVersion!==REQUIRED_VERSION)return res.status(409).json({error:'Live worker is not v18; probe blocked',runpodStatus:versionPayload?.status||'',output:versionOutput});
+    if(versionOutput?.bundleVersion!==REQUIRED_VERSION)return res.status(409).json({error:'Live worker does not match the required v18 bundle; probe blocked',runpodStatus:versionPayload?.status||'',output:versionOutput});
     const blobToken=process.env.BLOB_READ_WRITE_TOKEN||'';
     if(!blobToken)return res.status(503).json({error:'Blob storage missing'});
     if(!(await claimProbe(blobToken)))return res.status(409).json({error:'The one-shot v18 identity probe was already dispatched'});
