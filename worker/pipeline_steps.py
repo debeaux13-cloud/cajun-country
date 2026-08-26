@@ -548,18 +548,17 @@ def _compact_prompt_value(value, limit: int) -> str:
 
 def locked_still_prompt(scene: dict) -> str:
     """Put identity, stylization, and scene truth inside Runway's hard 1,000-character limit."""
-    identity = _compact_prompt_value(scene.get("identityLock"), 220)
+    identity = _compact_prompt_value(scene.get("identityLock"), 320)
     setting = _compact_prompt_value(scene.get("setting"), 65)
     action = _compact_prompt_value(scene.get("visibleAction") or scene.get("description"), 90)
     required = _compact_prompt_value(", ".join(scene.get("requiredVisibleDetails") or []), 80)
     supporting = _compact_prompt_value(", ".join(scene.get("supportingCharacters") or []), 30)
     prompt = (
-        f"@Subject is the exact uploaded hero. IDENTITY LOCK: {identity}. "
-        "STYLE LOCK: warm stylized 3D CGI animated-movie rendering: rounded digital-sculpture forms, clear weight and volume, appealing simplified faces, tactile hair/fur/fabric, soft light, gentle highlights, shallow cinematic depth. "
-        "Curved form through light and shadow, no hard outlines. Not-quite-realistic: neither photoreal/live-action nor flat 2D/vector cartoon. "
+        f"@Subject contains the exact uploaded heroes. IDENTITY LOCK: {identity}. "
+        "STYLE: warm stylized 3D CGI movie; rounded sculpted forms, clear weight/volume, appealing simplified faces, tactile hair/fur/fabric, soft light, gentle highlights, shallow depth; form via light/shadow, no hard outlines. Never photoreal/live-action or flat 2D/vector. "
         f"SCENE: {setting}. ACTION: {action}. MUST SHOW: {required}. SUPPORTING: {supporting or 'only those named in the scene'}. "
-        "New 16:9 composition. Preserve exact build, colors, markings, face or muzzle, ears and tail. "
-        "Bodies stay separate. No generic substitute, invented anatomy, source background, leash, text, logo, collage, or duplicate."
+        "New 16:9 composition. Preserve each subject's exact build, colors, markings, face/muzzle, ears and tail. "
+        "Keep bodies and identities separate. No generic substitutes, anatomy swaps, source background, text, logo, collage, or duplicate."
     )
     return prompt[:1000].rstrip()
 

@@ -8,7 +8,7 @@ from audio_polish import add_background_music
 from pipeline_steps import build_movie, build_pdf, illustrate, locked_motion_scene_prompt, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
 from runway_adapter import RunwayGen4Turbo
 
-BUNDLE_VERSION="2026-08-26-mcs-v18-photo-identity-3d-cgi-video-lock"
+BUNDLE_VERSION="2026-08-26-mcs-v18-multi-subject-3d-cgi-video-lock"
 
 def req(name):
     v=os.environ.get(name,"").strip()

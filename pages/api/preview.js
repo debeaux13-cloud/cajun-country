@@ -19,6 +19,21 @@ async function gatewayToken(){
   throw new Error('Vercel AI Gateway auth missing');
 }
 
+const subjectSchema={
+  type:'object',additionalProperties:false,
+  properties:{
+    referencePosition:{type:'string'},
+    kind:{type:'string',enum:['person','dog','cat','animal']},
+    species:{type:'string'},
+    primaryBreedGuess:{type:'string'},
+    breedConfidence:{type:'string',enum:['high','medium','low','not_applicable']},
+    keyMarkers:{type:'array',items:{type:'string'}},
+    identityDescription:{type:'string'},
+    uncertainDetails:{type:'array',items:{type:'string'}}
+  },
+  required:['referencePosition','kind','species','primaryBreedGuess','breedConfidence','keyMarkers','identityDescription','uncertainDetails']
+};
+
 const identitySchema={
   type:'object',additionalProperties:false,
   properties:{
@@ -30,9 +45,10 @@ const identitySchema={
     keyMarkers:{type:'array',items:{type:'string'}},
     breedAlternatives:{type:'array',items:{type:'string'}},
     identityDescription:{type:'string'},
-    uncertainDetails:{type:'array',items:{type:'string'}}
+    uncertainDetails:{type:'array',items:{type:'string'}},
+    subjects:{type:'array',minItems:1,maxItems:6,items:subjectSchema}
   },
-  required:['subjectCount','subjectType','species','primaryBreedGuess','breedConfidence','keyMarkers','breedAlternatives','identityDescription','uncertainDetails']
+  required:['subjectCount','subjectType','species','primaryBreedGuess','breedConfidence','keyMarkers','breedAlternatives','identityDescription','uncertainDetails','subjects']
 };
 
 async function analyzeReference(dataUrl){
@@ -49,7 +65,9 @@ For every pet, identify species first and then identify breed or breed type from
 
 For every other animal, use the same layered morphology process rather than a pet-only shortcut. First isolate the principal subject from background, lighting, artistic style, and scale. Read its silhouette and structural blueprint: skeletal proportions, limb count and configuration, body length-to-height ratio, posture, tail, and paw, hoof, claw, fin, wing, or other locomotion structures. Detect anatomical landmarks such as head and snout shape, ear placement and conformation, eye spacing, neck, joints, and the presence and type of fur, hair, scales, feathers, skin, plates, spines, horns, antlers, beak, shell, or exoskeleton. Map surface texture and color distribution including blocking, stripes, spots, ticking, brindle, patches, gradients, and species-specific markings. Then probability-match those combined markers against biological taxonomy, weighing likely species, genus/type, breed or variety. State the closest supported classification, confidence, evidence, and alternatives; never let scenery or photographic style decide the animal.
 
-For every person, describe visible identity features without naming or trying to recognize the individual and without matching against a face-recognition database. Map facial landmarks including eye corners and spacing, nose shape, mouth shape, jaw contour, cheek structure, and face shape. Preserve the relative proportions and angles among the forehead, eyes, nose, mouth, jaw, and lower face. Map visible skin tone, hair color/texture/style, eye color, facial hair, eyewear, and distinguishing non-sensitive visible features. Beyond the face, inspect silhouette, apparent age group, body proportions and build, posture, clothing, and accessories. Use breedConfidence=not_applicable. If a face, tail, ear, eye, limb, marking, garment, or accessory is obscured, put that fact in uncertainDetails instead of inventing it. Never substitute a stereotypical breed, age, skin tone, color, body type, or face.`},{role:'user',content:[{type:'text',text:'Create the exact visual identity lock for this uploaded reference.'},{type:'image_url',image_url:{url:dataUrl}}]}]
+For every person, describe visible identity features without naming or trying to recognize the individual and without matching against a face-recognition database. Map facial landmarks including eye corners and spacing, nose shape, mouth shape, jaw contour, cheek structure, and face shape. Preserve the relative proportions and angles among the forehead, eyes, nose, mouth, jaw, and lower face. Map visible skin tone, hair color/texture/style, eye color, facial hair, eyewear, and distinguishing non-sensitive visible features. Beyond the face, inspect silhouette, apparent age group, body proportions and build, posture, clothing, and accessories. Use breedConfidence=not_applicable. If a face, tail, ear, eye, limb, marking, garment, or accessory is obscured, put that fact in uncertainDetails instead of inventing it. Never substitute a stereotypical breed, age, skin tone, color, body type, or face.
+
+When the upload contains multiple principal people or animals, create one subjects entry for every principal subject in stable left-to-right order. Give each a referencePosition and its own species/type, breed guess, confidence, markers, exact identity description, and uncertainties. Never average, merge, hybridize, or transfer the coat, face, ears, tail, body, clothing, or accessories of one subject onto another. subjectCount must equal subjects.length.`},{role:'user',content:[{type:'text',text:'Create the exact visual identity lock for every principal subject in this uploaded reference.'},{type:'image_url',image_url:{url:dataUrl}}]}]
     })
   });
   const payload=await response.json();
@@ -59,6 +77,17 @@ For every person, describe visible identity features without naming or trying to
   const description=String(parsed?.identityDescription||'').trim();
   if(description.length<40)throw new Error('Reference identity analysis was incomplete');
   const uncertain=Array.isArray(parsed?.uncertainDetails)?parsed.uncertainDetails.map(value=>String(value).trim()).filter(Boolean):[];
+  const subjects=(Array.isArray(parsed?.subjects)?parsed.subjects:[]).map((subject,index)=>({
+    referencePosition:String(subject?.referencePosition||`subject ${index+1}`).trim(),
+    kind:String(subject?.kind||'animal').trim(),
+    species:String(subject?.species||'').trim(),
+    primaryBreedGuess:String(subject?.primaryBreedGuess||'').trim(),
+    breedConfidence:String(subject?.breedConfidence||'low'),
+    keyMarkers:Array.isArray(subject?.keyMarkers)?subject.keyMarkers.map(value=>String(value).trim()).filter(Boolean):[],
+    identityDescription:String(subject?.identityDescription||'').trim(),
+    uncertainDetails:Array.isArray(subject?.uncertainDetails)?subject.uncertainDetails.map(value=>String(value).trim()).filter(Boolean):[]
+  })).filter(subject=>subject.identityDescription.length>=20);
+  if(!subjects.length||subjects.length!==Number(parsed.subjectCount||0))throw new Error('Reference identity analysis did not separate every subject');
   return{
     subjectCount:Number(parsed.subjectCount||1),
     subjectType:String(parsed.subjectType||'pet'),
@@ -68,14 +97,15 @@ For every person, describe visible identity features without naming or trying to
     keyMarkers:Array.isArray(parsed.keyMarkers)?parsed.keyMarkers.map(value=>String(value).trim()).filter(Boolean):[],
     breedAlternatives:Array.isArray(parsed.breedAlternatives)?parsed.breedAlternatives.map(value=>String(value).trim()).filter(Boolean):[],
     identityDescription:description,
-    uncertainDetails:uncertain
+    uncertainDetails:uncertain,
+    subjects
   };
 }
 
 function lockScreenplayIdentity(screenplay,identity){
-  const uncertainty=identity.uncertainDetails.length?` Obscured details that must not be invented: ${identity.uncertainDetails.join('; ')}.`:'';
-  const breed=identity.breedConfidence==='not_applicable'?'':` Species/breed lock: ${identity.species}; ${identity.primaryBreedGuess}; confidence ${identity.breedConfidence}. Visible breed markers: ${identity.keyMarkers.join('; ')}.`;
-  const lock=`PHOTO-DERIVED IDENTITY.${breed} Exact visible subject: ${identity.identityDescription}.${uncertainty} Match the uploaded subject, never a generic substitute. Preserve the exact species or visible human features, age group, body size, build, colors, markings, facial geometry or muzzle, ears, visible tail length, eyes, hair, posture, clothing and accessories in every scene. STYLE: warm stylized 3D CGI animated-movie rendering with rounded digital-sculpture forms, clear weight and volume, appealing simplified facial proportions, tactile hair, fur and fabric, soft environmental light, gentle highlights and shallow cinematic depth. Define curved form through light and shadow, never hard outlines. Not-quite-realistic feature animation: neither photoreal/live-action nor flat 2D/vector cartoon.`;
+  const summaries=identity.subjects.map((subject,index)=>`S${index+1} ${subject.referencePosition}: ${subject.species} ${subject.primaryBreedGuess}; ${subject.keyMarkers.slice(0,4).join(', ')}`).join(' | ');
+  const details=identity.subjects.map((subject,index)=>`S${index+1} exact identity: ${subject.identityDescription}${subject.uncertainDetails.length?`; obscured, do not invent: ${subject.uncertainDetails.join(', ')}`:''}`).join(' ');
+  const lock=`PHOTO-DERIVED SUBJECT LOCKS (${identity.subjects.length}): ${summaries}. ${details} Keep every subject separate and recognizable; never merge, hybridize, swap or average their anatomy, facial geometry, colors, markings, hair/fur, ears, tails, clothing or accessories. STYLE: warm stylized 3D CGI animated-movie rendering with rounded digital-sculpture forms, clear weight and volume, appealing simplified facial proportions, tactile hair, fur and fabric, soft environmental light, gentle highlights and shallow cinematic depth. Define curved form through light and shadow, never hard outlines. Neither photoreal/live-action nor flat 2D/vector cartoon.`;
   return{...screenplay,scenes:screenplay.scenes.map(scene=>({...scene,identityLock:`${lock} ${String(scene.identityLock||'')}`.trim()}))};
 }
 
