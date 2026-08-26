@@ -1,1 +1,4 @@
-import{issueSignedToken,presignUrl,del}from'@vercel/blob';export default async function handler(req,res){const pathname=`mcs/selftest/presign-${Date.now()}.txt`;try{const validUntil=Date.now()+5*60*1000;const token=await issueSignedToken({pathname,operations:['put'],allowedContentTypes:['text/plain'],maximumSizeInBytes:1024*1024,validUntil});const{presignedUrl}=await presignUrl(token,{operation:'put',pathname,access:'private',allowedContentTypes:['text/plain'],maximumSizeInBytes:1024*1024,addRandomSuffix:false,allowOverwrite:true,validUntil});const host=new URL(presignedUrl).host;const put=await fetch(presignedUrl,{method:'PUT',headers:{'Content-Type':'text/plain'},body:'MCS signed upload OK'});const text=await put.text();try{await del(pathname,{token:process.env.BLOB_READ_WRITE_TOKEN})}catch{}return res.status(200).json({ok:put.ok,status:put.status,host,response:text.slice(0,300)})}catch(e){return res.status(500).json({ok:false,error:e.message})}}
+export default async function handler(req,res){
+  res.setHeader('Cache-Control','private, no-store');
+  return res.status(410).json({error:'Temporary diagnostic route retired'});
+}

@@ -1,1 +1,4 @@
-export default async function handler(req,res){const secret=process.env.MCS_WORKER_SECRET||'';if(!secret)return res.status(503).json({error:'worker secret missing'});try{const r=await fetch('https://main-character-studios.vercel.app/api/internal/tts',{method:'POST',headers:{Authorization:'Bearer '+secret,'Content-Type':'application/json'},body:JSON.stringify({text:'Main Character Studios narration test.'})});const b=Buffer.from(await r.arrayBuffer());return res.status(200).json({ok:r.ok,status:r.status,bytes:b.length,contentType:r.headers.get('content-type')})}catch(e){return res.status(500).json({error:e.message})}}
+export default async function handler(req,res){
+  res.setHeader('Cache-Control','private, no-store');
+  return res.status(410).json({error:'Temporary diagnostic route retired'});
+}

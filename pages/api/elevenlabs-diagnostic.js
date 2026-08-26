@@ -1,1 +1,4 @@
-export default async function handler(req,res){const key=process.env.ELEVENLABS_API_KEY||'';const voice=process.env.ELEVENLABS_VOICE_ID||'21m00Tcm4TlvDq8ikWAM';if(!key)return res.status(200).json({ok:false,present:false});try{const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}?output_format=mp3_44100_128`,{method:'POST',headers:{'xi-api-key':key,'Content-Type':'application/json','Accept':'audio/mpeg'},body:JSON.stringify({text:'Main Character Studios audio check.',model_id:'eleven_flash_v2_5',voice_settings:{stability:.55,similarity_boost:.78,style:.2,use_speaker_boost:true,speed:1.05}})});const bytes=Buffer.from(await r.arrayBuffer());return res.status(200).json({ok:r.ok,present:true,status:r.status,contentType:r.headers.get('content-type')||'',bytes:bytes.length})}catch(e){return res.status(200).json({ok:false,present:true,status:null,error:e.message})}}
+export default async function handler(req,res){
+  res.setHeader('Cache-Control','private, no-store');
+  return res.status(410).json({error:'Temporary diagnostic route retired'});
+}

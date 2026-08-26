@@ -1,1 +1,4 @@
-import{runpod}from'./_runpod';export default async function handler(req,res){const{key,base}=runpod();if(!key||!base)return res.status(503).json({error:'RunPod config missing'});try{const r=await fetch(base+'/runsync',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({input:{action:'version'}})});const data=await r.json();return res.status(r.status).json(data)}catch(e){return res.status(502).json({error:e.message})}}
+export default async function handler(req,res){
+  res.setHeader('Cache-Control','private, no-store');
+  return res.status(410).json({error:'Temporary diagnostic route retired'});
+}

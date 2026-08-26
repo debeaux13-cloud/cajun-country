@@ -1,1 +1,4 @@
-import{runpod}from'./_runpod';export default async function handler(req,res){const{key}=runpod();const id='id81aby9nfth9h';if(!key)return res.status(503).json({error:'RunPod key missing'});try{const r=await fetch(`https://rest.runpod.io/v1/endpoints/${id}`,{method:'PATCH',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({workersMin:0,workersMax:4,scalerType:'REQUEST_COUNT',scalerValue:1,idleTimeout:90,executionTimeoutMs:7200000})});const j=await r.json();if(!r.ok)return res.status(r.status).json({error:'endpoint scheduler update failed',detail:j});return res.status(200).json({ok:true,id:j.id||id,scalerType:j.scalerType,scalerValue:j.scalerValue,workersMin:j.workersMin,workersMax:j.workersMax,version:j.version})}catch(e){return res.status(502).json({error:e.message})}}
+export default async function handler(req,res){
+  res.setHeader('Cache-Control','private, no-store');
+  return res.status(410).json({error:'Temporary diagnostic route retired'});
+}

@@ -1,1 +1,4 @@
-import{runpod}from'./_runpod';export default async function handler(req,res){const{key}=runpod();const templateId='2w5x8empgg';if(!key)return res.status(503).json({error:'RunPod key missing'});try{const r=await fetch(`https://rest.runpod.io/v1/templates/${templateId}`,{headers:{Authorization:'Bearer '+key}});const t=await r.json();if(!r.ok)return res.status(r.status).json({error:'template lookup failed'});return res.status(200).json({id:t.id,name:t.name,imageName:t.imageName,dockerEntrypoint:t.dockerEntrypoint||[],dockerStartCmd:t.dockerStartCmd||[],ports:t.ports||[],volumeMountPath:t.volumeMountPath||null,envKeys:Object.keys(t.env||{})})}catch(e){return res.status(502).json({error:e.message})}}
+export default async function handler(req,res){
+  res.setHeader('Cache-Control','private, no-store');
+  return res.status(410).json({error:'Temporary diagnostic route retired'});
+}

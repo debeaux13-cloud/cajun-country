@@ -1,1 +1,4 @@
-import{head}from'@vercel/blob';import crypto from'crypto';export default async function handler(req,res){const id=String(req.query?.id||'');if(!id)return res.status(400).json({error:'id required'});const token=process.env.BLOB_READ_WRITE_TOKEN;if(!token)return res.status(503).json({error:'blob token missing'});try{const meta=await head(`mcs/jobs/${id}/reference.bin`,{token});const r=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`}});const b=Buffer.from(await r.arrayBuffer());return res.status(200).json({ok:r.ok,status:r.status,bytes:b.length,contentType:r.headers.get('content-type'),magic:b.subarray(0,16).toString('hex'),sha256:crypto.createHash('sha256').update(b).digest('hex')})}catch(e){return res.status(500).json({error:e.message})}}
+export default async function handler(req,res){
+  res.setHeader('Cache-Control','private, no-store');
+  return res.status(410).json({error:'Temporary diagnostic route retired'});
+}
