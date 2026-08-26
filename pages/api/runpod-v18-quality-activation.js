@@ -41,13 +41,20 @@ function templateBody(template,command){
 async function json(response){return response.json().catch(()=>({}))}
 
 async function liveVersion(base,headers){
-  for(let attempt=0;attempt<3;attempt+=1){
-    const response=await fetch(base+'/runsync',{method:'POST',headers,body:JSON.stringify({input:{action:'version'}})});
+  const start=await fetch(base+'/run',{method:'POST',headers,body:JSON.stringify({input:{action:'version'}})});
+  const accepted=await json(start);
+  if(!start.ok)throw new Error(accepted?.error||accepted?.message||`Worker version check failed (${start.status})`);
+  const id=String(accepted?.id||'');
+  if(!id)throw new Error('Worker version check returned no job ID');
+  for(let attempt=0;attempt<20;attempt+=1){
+    await new Promise(resolve=>setTimeout(resolve,1500));
+    const response=await fetch(`${base}/status/${encodeURIComponent(id)}`,{headers});
     const payload=await json(response);
-    if(!response.ok)throw new Error(payload?.error||payload?.message||`Worker version check failed (${response.status})`);
-    if(payload?.output?.bundleVersion)return payload;
+    if(!response.ok)throw new Error(payload?.error||payload?.message||`Worker version status failed (${response.status})`);
+    if(payload?.status==='COMPLETED')return payload;
+    if(['FAILED','CANCELLED','TIMED_OUT'].includes(String(payload?.status||'')))return payload;
   }
-  return{};
+  return{status:'TIMED_OUT',id};
 }
 
 async function endpointState(key){
