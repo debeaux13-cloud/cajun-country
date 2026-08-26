@@ -1,1 +1,1 @@
-{"name":"main-character-studios-by-tiffani","private":true,"scripts":{"dev":"next dev","build":"next build","start":"next start"},"dependencies":{"@vercel/blob":"latest","@vercel/oidc":"latest","next":"14.2.25","react":"18.3.1","react-dom":"18.3.1"}}
+{"name":"main-character-studios-by-tiffani","private":true,"scripts":{"dev":"next dev","build":"next build","start":"next start"},"dependencies":{"@vercel/blob":"2.4.0","@vercel/oidc":"latest","next":"14.2.25","react":"18.3.1","react-dom":"18.3.1"}}
