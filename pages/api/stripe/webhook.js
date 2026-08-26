@@ -52,6 +52,10 @@ async function blobExists(path,token){
 }
 
 export default async function handler(req,res){
+  if(req.method==='GET'){
+    const configured=webhookSecrets().length>0;
+    return res.status(configured?200:503).json({ok:configured,configured});
+  }
   if(req.method!=='POST')return res.status(405).json({error:'POST only'});
   if(!webhookSecrets().length)return res.status(503).json({error:'Stripe webhook secret missing'});
 
