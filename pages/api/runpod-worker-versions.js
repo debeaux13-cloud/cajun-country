@@ -1,1 +1,29 @@
-import{runpod}from'./_runpod';export default async function handler(req,res){const{key}=runpod();const endpointId='id81aby9nfth9h';if(!key)return res.status(503).json({error:'RunPod key missing'});try{const r=await fetch(`https://rest.runpod.io/v1/endpoints/${endpointId}`,{headers:{Authorization:'Bearer '+key}});const j=await r.json();if(!r.ok)return res.status(r.status).json({error:'endpoint lookup failed'});const workers=(j.workers||[]).map(w=>({id:w.id||w.workerId||null,status:w.status||w.desiredStatus||null,version:w.version??w.endpointVersion??null,createdAt:w.createdAt||null}));return res.status(200).json({id:j.id,name:j.name,version:j.version,templateId:j.templateId,workersMin:j.workersMin,workersMax:j.workersMax,workers})}catch(e){return res.status(502).json({error:e.message})}}
+import{runpod}from'./_runpod';
+
+export default async function handler(req,res){
+  const{key}=runpod();
+  const endpointId='id81aby9nfth9h';
+  if(!key)return res.status(503).json({error:'RunPod key missing'});
+  try{
+    const response=await fetch(`https://rest.runpod.io/v1/endpoints/${endpointId}?includeWorkers=true`,{headers:{Authorization:'Bearer '+key}});
+    const endpoint=await response.json();
+    if(!response.ok)return res.status(response.status).json({error:'Endpoint lookup failed'});
+    const workers=(endpoint.workers||[]).map(worker=>({
+      id:worker.id||worker.workerId||null,
+      status:worker.status||worker.desiredStatus||null,
+      desiredStatus:worker.desiredStatus||null,
+      version:worker.version??worker.endpointVersion??null,
+      createdAt:worker.createdAt||null,
+      startedAt:worker.startedAt||worker.lastStartedAt||null
+    }));
+    return res.status(200).json({
+      id:endpoint.id,
+      name:endpoint.name,
+      version:endpoint.version,
+      templateId:endpoint.templateId,
+      workersMin:endpoint.workersMin,
+      workersMax:endpoint.workersMax,
+      workers
+    });
+  }catch(error){return res.status(502).json({error:error.message})}
+}
