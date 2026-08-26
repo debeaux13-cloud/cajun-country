@@ -42,7 +42,9 @@ export default function Preview(){
     }catch(e){setMessage(e.message);setPaying(false)}
   }
 
-  const done=String(job?.status||'').toUpperCase()==='COMPLETED'&&job?.videoUrl;
+  const completed=String(job?.status||'').toUpperCase()==='COMPLETED';
+  const videoUrl=completed&&mcsJobId?'/api/preview-media?id='+encodeURIComponent(mcsJobId):job?.videoUrl||null;
+  const done=completed&&videoUrl;
   const progress=job?.progress;
   return <main style={{minHeight:'100vh',background:'#0d0912',color:'#fff',fontFamily:'Arial,sans-serif'}}>
     <div style={{maxWidth:920,margin:'0 auto',padding:24}}>
@@ -51,7 +53,7 @@ export default function Preview(){
       <p style={{fontSize:18,opacity:.85}}>{message}</p>
       {typeof progress==='number'&&<div style={{height:12,background:'#2a2130',borderRadius:99,overflow:'hidden',margin:'22px 0'}}><div style={{height:'100%',width:Math.max(4,Math.min(100,progress))+'%',background:'#8a3ffc'}}/></div>}
       {done?<>
-        <video src={job.videoUrl} controls autoPlay playsInline style={{width:'100%',maxHeight:'70vh',borderRadius:24,background:'#000'}}/>
+        <video src={videoUrl} controls autoPlay playsInline style={{width:'100%',maxHeight:'70vh',borderRadius:24,background:'#000'}}/>
         <div style={{background:'#19121f',border:'1px solid #3d2d49',borderRadius:22,padding:22,marginTop:22}}>
           <h2>Love the opening minute? Finish the movie.</h2>
           <div style={{fontSize:42,fontWeight:900}}>$79</div>
