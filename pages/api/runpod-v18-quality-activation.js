@@ -79,7 +79,7 @@ export default async function handler(req,res){
   if(req.method!=='GET')return res.status(405).json({error:'GET only'});
   if(!authorized(req))return res.status(401).json({error:'Unauthorized'});
   const action=String(req.query?.action||'status');
-  if(!['status','hold','patch','activate','probe'].includes(action))return res.status(400).json({error:'Unsupported action'});
+  if(!['status','hold','patch','activate','version','probe'].includes(action))return res.status(400).json({error:'Unsupported action'});
   const{key,base}=runpod();
   if(!key||!base)return res.status(503).json({error:'RunPod configuration incomplete'});
   const headers={Authorization:`Bearer ${key}`,'Content-Type':'application/json'};
@@ -110,6 +110,12 @@ export default async function handler(req,res){
       return res.status(200).json({ok:true,phase:'activated_at_one',workersMin:updated.workersMin??0,workersMax:updated.workersMax??1,endpointVersion:updated.version??null});
     }
     if(Number(before.endpoint.workersMax)!==1)return res.status(409).json({error:'Probe requires endpoint capped at one worker',workersMax:before.endpoint.workersMax});
+    const versionResponse=await fetch(base+'/runsync',{method:'POST',headers,body:JSON.stringify({input:{action:'version'}})});
+    const versionPayload=await json(versionResponse);
+    if(!versionResponse.ok)return res.status(versionResponse.status).json({error:versionPayload?.error||versionPayload?.message||'Worker version check failed'});
+    const versionOutput=versionPayload?.output||{};
+    if(action==='version')return res.status(200).json({ok:true,phase:'version',runpodStatus:versionPayload?.status||'',output:versionOutput});
+    if(versionOutput?.bundleVersion!=='2026-08-26-mcs-v18-photo-identity-and-style-lock')return res.status(409).json({error:'Live worker is not v18; probe blocked',output:versionOutput});
     const blobToken=process.env.BLOB_READ_WRITE_TOKEN||'';
     if(!blobToken)return res.status(503).json({error:'Blob storage missing'});
     if(!(await claimProbe(blobToken)))return res.status(409).json({error:'The one-shot v18 identity probe was already dispatched'});
