@@ -7,7 +7,7 @@ export default async function handler(req,res){
   if(!token)return res.status(503).json({error:'Blob storage missing'});
   if(req.method==='PUT'||req.method==='POST'){
     const chunks=[];for await(const c of req)chunks.push(c);const data=Buffer.concat(chunks);
-    const blob=await put(path,data,{access:'private',addRandomSuffix:false,token,contentType:req.headers['content-type']||'application/octet-stream'});
+    const blob=await put(path,data,{access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:req.headers['content-type']||'application/octet-stream'});
     return res.status(200).json({ok:true,id,kind,scene:scene||null,url:blob.url,downloadUrl:blob.downloadUrl||blob.url,size:data.length});
   }
   if(req.method==='GET'){
