@@ -539,6 +539,31 @@ def plan_story(vision: str, approved_preview: dict, tier: str, opening_manifest:
     return plan
 
 
+def _compact_prompt_value(value, limit: int) -> str:
+    compact = " ".join(str(value or "").split())
+    if len(compact) <= limit:
+        return compact.rstrip(" ,.;")
+    return compact[:limit].rsplit(" ", 1)[0].rstrip(" ,.;")
+
+
+def locked_still_prompt(scene: dict) -> str:
+    """Put identity, stylization, and scene truth inside Runway's hard 1,000-character limit."""
+    identity = _compact_prompt_value(scene.get("identityLock"), 220)
+    setting = _compact_prompt_value(scene.get("setting"), 65)
+    action = _compact_prompt_value(scene.get("visibleAction") or scene.get("description"), 90)
+    required = _compact_prompt_value(", ".join(scene.get("requiredVisibleDetails") or []), 80)
+    supporting = _compact_prompt_value(", ".join(scene.get("supportingCharacters") or []), 30)
+    prompt = (
+        f"@Subject is the exact uploaded hero. IDENTITY LOCK: {identity}. "
+        "STYLE LOCK: premium stylized animated-feature art: designed simplified forms, expressive eyes, painterly surfaces, illustrative texture, animation-rendered light. "
+        "Never photorealistic, live action, camera-realistic, or realistic pet photography. "
+        f"SCENE: {setting}. ACTION: {action}. MUST SHOW: {required}. SUPPORTING: {supporting or 'only those named in the scene'}. "
+        "New 16:9 composition. Preserve exact build, colors, markings, face or muzzle, ears and tail. "
+        "Bodies stay separate. No generic substitute, invented anatomy, source background, leash, text, logo, collage, or duplicate."
+    )
+    return prompt[:1000].rstrip()
+
+
 def _runway_reference_image(
     reference_path: str,
     prompt: str,
@@ -564,8 +589,8 @@ def _runway_reference_image(
             json={
                 "model": "gen4_image_turbo",
                 "ratio": "1280:720",
-                "promptText": f"@Remi {prompt}"[:1000],
-                "referenceImages": [{"uri": reference_uri, "tag": "Remi"}],
+                "promptText": prompt[:1000],
+                "referenceImages": [{"uri": reference_uri, "tag": "Subject"}],
             },
             timeout=60,
         )
@@ -636,19 +661,7 @@ def illustrate(
     on_task_created=None,
     existing_task_id: str | None = None,
 ) -> str:
-    prompt = (
-        "Create one entirely new 16:9 CINEMATIC ANIMATED-FEATURE frame from a blank canvas. Use one consistent semi-realistic stylized film language: dimensional character modeling, believable anatomy and proportions, expressive but natural eyes and face, detailed coat/hair/skin texture, cinematic depth, soft realistic lighting, polished environmental detail, and refined 2D/3D feature-animation rendering. The result must sit clearly between flat cartoon and photorealistic live action. Never use flat children's-TV cartoon shapes, thick crude outlines, rubber-hose anatomy, generic clip-art backgrounds, oil-painting concept art, or raw photorealism. The uploaded photo is an IDENTITY-ONLY reference, never a background, pose, composition, camera-angle, location, leash, lead, or harness reference. "
-        "Preserve the exact identity, approximate age, skin tone, hair, adult body size, healthy body condition, coat color, markings, collar and species of every principal subject. Never make a pet thinner, heavier, younger, smaller, larger, or a different color between scenes. "
-        "For every pet, reproduce the exact visible tail length and shape from the identity reference. Never invent, lengthen, curl, or enlarge a tail. A docked tail must remain a tiny docked nub: never generate a full-length, long, curved, curled, fluffy, or white-tipped tail. When tail detail is unclear, keep the rear out of frame rather than inventing one. "
-        "REMOVE every leash, lead, rope, tether, and harness from the character unless the customer's story explicitly requests that exact item. A collar may remain when it is an identity trait. REPLACE every part of the source environment. Do not retain or recreate its driveway, street, lawn, gravel, bins, vehicles, buildings, bystanders, lighting, shadows, leash position, camera angle, or original pose unless the requested scene explicitly names one. "
-        "The finished frame must visibly contain the scene's named location, props, supporting characters, and action. If the narration names a bench, ribbon, clue, bridge, stream, flower bed, picnic table, party decorations, person, or pet, show that exact element clearly and make the main character physically interact with it. Never substitute an empty park, empty forest, or generic walking shot for the narrated event. "
-        f"Scene: {scene['description']}. Setting: {scene['setting']}. Visible action: {scene['visibleAction']}. "
-        f"Required visible details: {', '.join(scene['requiredVisibleDetails'])}. Emotion: {scene['emotionalTone']}. "
-        "SCENE TRUTH IS AUTHORITATIVE: show that exact setting, exact objects, and exact action without substitution. A mirror must be a mirror, a door must visibly exist if the character reaches or opens it, and every required interactive prop must be clearly present in the character's reachable path. "
-        "Translate the customer's own genre and tone into the visual world. Fantasy, space, dinosaurs, superheroes, comedy, weddings, memories, drama, and scary stories must look meaningfully different from one another. Make the requested setting unmistakable and let it fill most of the frame. Change the subject's pose and viewpoint to perform the requested action naturally. "
-        "CRITICAL OPENING-FRAME RULE: depict the instant immediately BEFORE the principal action begins, with balanced cartoon anatomy, grounded feet or paws, and room in the frame for the character to travel. Do not freeze the character at the climax, completion, airborne apex, deepest crouch, fully extended reach, or final impact of the action. The animation stage—not this still—must perform and complete the narrated action. "
-        "Show every narrated object clearly, but leave the physical action visibly unfinished. No text, captions, collage, duplicated bodies, disappearing limbs or tail, unrelated characters, or invisible narrated props. Never add commercial logos, branded packaging, sponsorship signage, or product-placement framing."
-    )
+    prompt = locked_still_prompt(scene)
     if force_runway:
         return _runway_reference_image(
             reference_path,

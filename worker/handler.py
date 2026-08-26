@@ -8,7 +8,7 @@ from audio_polish import add_background_music
 from pipeline_steps import build_movie, build_pdf, illustrate, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
 from runway_adapter import RunwayGen4Turbo
 
-BUNDLE_VERSION="2026-08-26-mcs-v17-retry-safe-provider-checkpoints"
+BUNDLE_VERSION="2026-08-26-mcs-v18-photo-identity-and-style-lock"
 
 def req(name):
     v=os.environ.get(name,"").strip()
@@ -27,7 +27,8 @@ def handler(event):
     if payload.get("workerSecret"):os.environ["MCS_WORKER_SECRET"]=str(payload["workerSecret"])
     job_id=str(payload.get("jobId") or "").strip(); mode=str(payload.get("mode") or "paid").strip(); callback=str(payload.get("callbackBase") or "").rstrip("/")
     if not job_id or not callback: raise ValueError("jobId and callbackBase are required")
-    preview=mode in {"preview","preview_sound_resume"}
+    identity_probe=mode=="identity_probe"
+    preview=mode in {"preview","preview_sound_resume","identity_probe"}
     job_url=f"{callback}/api/internal/{'preview-pipeline' if preview else 'pipeline/jobs'}/{job_id}"
     r=requests.get(job_url,headers=auth_headers(),timeout=30); r.raise_for_status(); job=r.json()
     p=job.get("providers") or {}
@@ -146,6 +147,18 @@ def handler(event):
         with tempfile.TemporaryDirectory(prefix=f"mcs-{mode}-{job_id}-") as folder:
             root=Path(folder); reference=root/"reference.jpg"; src=requests.get(job["assets"]["reference"],headers=auth_headers(),timeout=60); src.raise_for_status(); reference.write_bytes(src.content)
             manifest=job.get("existingManifest") or {}; validate_story_plan(manifest,6 if preview else scene_count,1); scenes=list(manifest.get("scenes") or [])
+            if identity_probe:
+                scene=scenes[0]; n=int(scene["sceneNumber"]); image=str(root/f"identity-probe-{n}.png"); image_task={"id":""}
+                illustrate(
+                    str(reference),scene,image,True,
+                    on_task_created=lambda task_id,**retry:(
+                        image_task.update(id=str(task_id)),
+                        checkpoint_provider("illustrating",n,"runway-gen4-image-turbo",task_id,**retry)
+                    )[-1]
+                )
+                upload("identity-probe",image,content_type="image/png")
+                update("identity_probe",n,"ready",provider="runway-gen4-image-turbo",providerJobId=image_task["id"])
+                return {"jobId":job_id,"status":"ready","mode":mode,"completed":1,"identityProbe":True}
             if preview:
                 rendered=[None]*6
                 with ThreadPoolExecutor(max_workers=6) as ex:
