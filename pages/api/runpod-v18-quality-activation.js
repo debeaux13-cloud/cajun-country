@@ -7,10 +7,10 @@ const TEMPLATE_ID='2w5x8empgg';
 const ENDPOINT_ID='id81aby9nfth9h';
 const MCS_JOB_ID='25a1184e-8887-4ada-a33d-b24a67583bbc';
 const BUNDLE_URL='https://raw.githubusercontent.com/debeaux13-cloud/cajun-country/main/worker/mcs-v18-bundle.tar.gz';
-const BUNDLE_SHA256='00b9bff9be9ff0699b8663da14bc381a97463f494fe6de8a1042937f831fc1a3';
+const BUNDLE_SHA256='64c1a9aebb5d4c6cba27bf35e370dd8750daa566861418079f98b2697f0c3ce7';
 const PROBE_MARKER='mcs/control/v18-remi-identity-probe-dispatched.json';
 const REQUIRED_VERSION='2026-08-26-mcs-v18-photo-identity-and-style-lock';
-const REMI_IDENTITY='Remi: chocolate-and-rust Doberman Pinscher; lean athletic adult, deep chest; short smooth coat; wedge head/tapered muzzle; amber eyes; cropped ears, one possibly softer; docked nub tail, never long. Not a Golden Retriever.';
+const REMI_IDENTITY='Remi: chocolate/rust Doberman Pinscher; lean athletic adult, deep chest; short smooth coat; wedge head/tapered muzzle; amber eyes; cropped ears, one softer; docked nub tail, never long. Never a Golden Retriever.';
 
 function authorized(req){
   const supplied=String(req.query?.token||'');

@@ -555,8 +555,8 @@ def locked_still_prompt(scene: dict) -> str:
     supporting = _compact_prompt_value(", ".join(scene.get("supportingCharacters") or []), 30)
     prompt = (
         f"@Subject is the exact uploaded hero. IDENTITY LOCK: {identity}. "
-        "STYLE LOCK: dimensional premium feature-animation illustration: sculpted volume, designed simplified forms, expressive appeal, painterly material detail, natural depth, cinematic animated light. "
-        "Visibly stylized: neither photorealistic/live-action nor flat 2D/vector cartoon. Never realistic pet or human photography. "
+        "STYLE LOCK: stylized 3D CGI animated-movie rendering: digital-sculpture weight, curved volume and depth; soft environmental light, subtle coat or skin highlights; form defined by light and shadow, not hard outlines. "
+        "Modern not-quite-realistic feature animation: neither photoreal/live-action nor flat 2D/vector cartoon. "
         f"SCENE: {setting}. ACTION: {action}. MUST SHOW: {required}. SUPPORTING: {supporting or 'only those named in the scene'}. "
         "New 16:9 composition. Preserve exact build, colors, markings, face or muzzle, ears and tail. "
         "Bodies stay separate. No generic substitute, invented anatomy, source background, leash, text, logo, collage, or duplicate."
