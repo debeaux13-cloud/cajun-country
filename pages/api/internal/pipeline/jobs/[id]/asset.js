@@ -7,11 +7,11 @@ export default async function handler(req,res){
   if(!token)return res.status(503).json({error:'Blob storage missing'});
   if(req.method==='PUT'||req.method==='POST'){
     const chunks=[];for await(const c of req)chunks.push(c);const data=Buffer.concat(chunks);
-    const blob=await put(path,data,{access:'public',addRandomSuffix:false,token,contentType:req.headers['content-type']||'application/octet-stream'});
+    const blob=await put(path,data,{access:'private',addRandomSuffix:false,token,contentType:req.headers['content-type']||'application/octet-stream'});
     return res.status(200).json({ok:true,id,kind,url:blob.url,downloadUrl:blob.downloadUrl||blob.url,size:data.length});
   }
   if(req.method==='GET'){
-    try{const meta=await head(path,{token});const r=await fetch(meta.downloadUrl||meta.url);if(!r.ok)return res.status(r.status).json({error:'asset fetch failed'});res.setHeader('Content-Type',r.headers.get('content-type')||'application/octet-stream');res.setHeader('Cache-Control','private, no-store');return res.status(200).send(Buffer.from(await r.arrayBuffer()))}catch(e){return res.status(404).json({error:'asset not found'})}
+    try{const meta=await head(path,{token});const r=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)return res.status(r.status).json({error:'asset fetch failed'});res.setHeader('Content-Type',r.headers.get('content-type')||'application/octet-stream');res.setHeader('Cache-Control','private, no-store');return res.status(200).send(Buffer.from(await r.arrayBuffer()))}catch(e){return res.status(404).json({error:'asset not found'})}
   }
   return res.status(405).json({error:'Method not allowed'});
 }
