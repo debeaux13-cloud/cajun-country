@@ -80,6 +80,27 @@ async function logSnapshot(key,workerId){
   }finally{clearTimeout(timer)}
 }
 
+function extractArchive(payload){
+  const known=new Set([MCS_JOB_ID,PAID_JOB_ID.replace(/-u\d+$/,'')]);
+  const uuid=/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
+  const providerIds=new Set();
+  const matches=[];
+  function visit(value,path='root'){
+    if(matches.length>=300)return;
+    if(Array.isArray(value)){value.forEach((item,index)=>visit(item,`${path}[${index}]`));return}
+    if(value&&typeof value==='object'){for(const[key,item]of Object.entries(value))visit(item,`${path}.${key}`);return}
+    if(typeof value!=='string')return;
+    const ids=[...value.matchAll(uuid)].map(match=>match[0].toLowerCase());
+    const unknown=ids.filter(id=>!known.has(id));
+    unknown.forEach(id=>providerIds.add(id));
+    if(unknown.length||value.includes(PAID_JOB_ID)||value.includes(MCS_JOB_ID)||/runway|providerJobId|provider_started|illustrat|text_to_image/i.test(value)){
+      matches.push({path,ids:unknown,context:redact(value)});
+    }
+  }
+  visit(payload);
+  return{providerIds:[...providerIds],matches};
+}
+
 export default async function handler(req,res){
   res.setHeader('Cache-Control','private, no-store');
   res.setHeader('Referrer-Policy','no-referrer');
@@ -88,12 +109,21 @@ export default async function handler(req,res){
   const{key,base}=runpod();
   if(!key)return res.status(503).json({error:'RunPod key missing'});
   try{
-    const[workersResponse,statusResponse]=await Promise.all([
+    const metricsKey=process.env.RUNPOD_METRICS_API_KEY||process.env.RunPod_Metrics_Key||key;
+    const from='2026-08-26T19:17:00Z';
+    const to='2026-08-26T19:24:00Z';
+    const[workersResponse,statusResponse,archiveResponse,requestsResponse]=await Promise.all([
       fetch(`https://api.runpod.io/v2/serverless/${ENDPOINT_ID}/workers`,{headers:{Authorization:`Bearer ${key}`}}),
-      fetch(`${base}/status/${PAID_JOB_ID}`,{headers:{Authorization:`Bearer ${key}`}})
+      fetch(`${base}/status/${PAID_JOB_ID}`,{headers:{Authorization:`Bearer ${key}`}}),
+      fetch(`${base}/logs?batch=1000&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,{headers:{Authorization:`Bearer ${metricsKey}`}}),
+      fetch(`${base}/requests`,{headers:{Authorization:`Bearer ${key}`}})
     ]);
     const workersPayload=await workersResponse.json().catch(()=>({}));
     const statusPayload=await statusResponse.json().catch(()=>({}));
+    const archiveText=await archiveResponse.text().catch(()=>'');
+    const requestsText=await requestsResponse.text().catch(()=>'');
+    let archivePayload;try{archivePayload=JSON.parse(archiveText)}catch{archivePayload={text:redact(archiveText)}}
+    let requestsPayload;try{requestsPayload=JSON.parse(requestsText)}catch{requestsPayload={text:redact(requestsText)}}
     const workers=Array.isArray(workersPayload?.workers)?workersPayload.workers:[];
     const workerIds=new Set(workers.map(worker=>String(worker?.id||'')).filter(Boolean));
     for(const candidate of [statusPayload?.workerId,statusPayload?.worker_id,statusPayload?.worker?.id])if(candidate)workerIds.add(String(candidate));
@@ -103,6 +133,9 @@ export default async function handler(req,res){
       ok:true,
       workersStatus:workersResponse.status,
       jobStatus:statusResponse.status,
+      archiveStatus:archiveResponse.status,
+      requestsStatus:requestsResponse.status,
+      metricsKeyConfigured:Boolean(process.env.RUNPOD_METRICS_API_KEY||process.env.RunPod_Metrics_Key),
       job:{
         id:String(statusPayload?.id||PAID_JOB_ID),
         status:String(statusPayload?.status||''),
@@ -112,7 +145,9 @@ export default async function handler(req,res){
         retryCount:statusPayload?.retryCount??statusPayload?.retries??null
       },
       workers:workers.map(worker=>({id:String(worker?.id||''),status:String(worker?.status||''),version:worker?.version??worker?.endpointVersion??null,createdAt:worker?.createdAt||null,updatedAt:worker?.updatedAt||null})),
-      snapshots
+      snapshots,
+      archive:extractArchive(archivePayload),
+      requests:extractArchive(requestsPayload)
     });
   }catch(error){return res.status(502).json({error:redact(error.message)})}
 }
