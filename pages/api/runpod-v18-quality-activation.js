@@ -7,8 +7,10 @@ const TEMPLATE_ID='2w5x8empgg';
 const ENDPOINT_ID='id81aby9nfth9h';
 const MCS_JOB_ID='25a1184e-8887-4ada-a33d-b24a67583bbc';
 const BUNDLE_URL='https://raw.githubusercontent.com/debeaux13-cloud/cajun-country/main/worker/mcs-v18-bundle.tar.gz';
-const BUNDLE_SHA256='dd5508054c9417514c6451926e192519d76bfb9b6b5e26fe9b9fc272b4227589';
+const BUNDLE_SHA256='00b9bff9be9ff0699b8663da14bc381a97463f494fe6de8a1042937f831fc1a3';
 const PROBE_MARKER='mcs/control/v18-remi-identity-probe-dispatched.json';
+const REQUIRED_VERSION='2026-08-26-mcs-v18-photo-identity-and-style-lock';
+const REMI_IDENTITY='Remi: chocolate-and-rust Doberman Pinscher; lean athletic adult, deep chest; short smooth coat; wedge head/tapered muzzle; amber eyes; cropped ears, one possibly softer; docked nub tail, never long. Not a Golden Retriever.';
 
 function authorized(req){
   const supplied=String(req.query?.token||'');
@@ -37,6 +39,16 @@ function templateBody(template,command){
 }
 
 async function json(response){return response.json().catch(()=>({}))}
+
+async function liveVersion(base,headers){
+  for(let attempt=0;attempt<3;attempt+=1){
+    const response=await fetch(base+'/runsync',{method:'POST',headers,body:JSON.stringify({input:{action:'version'}})});
+    const payload=await json(response);
+    if(!response.ok)throw new Error(payload?.error||payload?.message||`Worker version check failed (${response.status})`);
+    if(payload?.output?.bundleVersion)return payload;
+  }
+  return{};
+}
 
 async function endpointState(key){
   const headers={Authorization:`Bearer ${key}`};
@@ -110,16 +122,14 @@ export default async function handler(req,res){
       return res.status(200).json({ok:true,phase:'activated_at_one',workersMin:updated.workersMin??0,workersMax:updated.workersMax??1,endpointVersion:updated.version??null});
     }
     if(Number(before.endpoint.workersMax)!==1)return res.status(409).json({error:'Probe requires endpoint capped at one worker',workersMax:before.endpoint.workersMax});
-    const versionResponse=await fetch(base+'/runsync',{method:'POST',headers,body:JSON.stringify({input:{action:'version'}})});
-    const versionPayload=await json(versionResponse);
-    if(!versionResponse.ok)return res.status(versionResponse.status).json({error:versionPayload?.error||versionPayload?.message||'Worker version check failed'});
+    const versionPayload=await liveVersion(base,headers);
     const versionOutput=versionPayload?.output||{};
     if(action==='version')return res.status(200).json({ok:true,phase:'version',runpodStatus:versionPayload?.status||'',output:versionOutput});
-    if(versionOutput?.bundleVersion!=='2026-08-26-mcs-v18-photo-identity-and-style-lock')return res.status(409).json({error:'Live worker is not v18; probe blocked',output:versionOutput});
+    if(versionOutput?.bundleVersion!==REQUIRED_VERSION)return res.status(409).json({error:'Live worker is not v18; probe blocked',runpodStatus:versionPayload?.status||'',output:versionOutput});
     const blobToken=process.env.BLOB_READ_WRITE_TOKEN||'';
     if(!blobToken)return res.status(503).json({error:'Blob storage missing'});
     if(!(await claimProbe(blobToken)))return res.status(409).json({error:'The one-shot v18 identity probe was already dispatched'});
-    const response=await fetch(base+'/run',{method:'POST',headers,body:JSON.stringify({input:{jobId:MCS_JOB_ID,callbackBase:'https://main-character-studios.vercel.app',mode:'identity_probe',workerSecret:process.env.MCS_WORKER_SECRET||''}})});
+    const response=await fetch(base+'/run',{method:'POST',headers,body:JSON.stringify({input:{jobId:MCS_JOB_ID,callbackBase:'https://main-character-studios.vercel.app',mode:'identity_probe',identityOverride:REMI_IDENTITY,workerSecret:process.env.MCS_WORKER_SECRET||''}})});
     const payload=await json(response);
     if(!response.ok)return res.status(response.status).json({error:payload?.error||payload?.message||'RunPod rejected identity probe',probeClaimed:true});
     return res.status(200).json({ok:true,phase:'identity_probe_dispatched',mcsJobId:MCS_JOB_ID,runpodJobId:payload.id,status:payload.status});

@@ -26,6 +26,7 @@ def handler(event):
         return {"status":"ready","bundleVersion":BUNDLE_VERSION,"product":"$49 / 3 minutes / 18 scenes","previewScenes":6,"paidContinuationScenes":12,"directBlobUploads":True,"soundEffects":True,"backgroundMusic":True,"weakMotionRetry":1}
     if payload.get("workerSecret"):os.environ["MCS_WORKER_SECRET"]=str(payload["workerSecret"])
     job_id=str(payload.get("jobId") or "").strip(); mode=str(payload.get("mode") or "paid").strip(); callback=str(payload.get("callbackBase") or "").rstrip("/")
+    identity_override=str(payload.get("identityOverride") or "").strip()
     if not job_id or not callback: raise ValueError("jobId and callbackBase are required")
     identity_probe=mode=="identity_probe"
     preview=mode in {"preview","preview_sound_resume","identity_probe"}
@@ -148,7 +149,10 @@ def handler(event):
             root=Path(folder); reference=root/"reference.jpg"; src=requests.get(job["assets"]["reference"],headers=auth_headers(),timeout=60); src.raise_for_status(); reference.write_bytes(src.content)
             manifest=job.get("existingManifest") or {}; validate_story_plan(manifest,6 if preview else scene_count,1); scenes=list(manifest.get("scenes") or [])
             if identity_probe:
-                scene=scenes[0]; n=int(scene["sceneNumber"]); image=str(root/f"identity-probe-{n}.png"); image_task={"id":""}
+                scene=dict(scenes[0])
+                if identity_override:
+                    scene["identityLock"]=(identity_override+" "+str(scene.get("identityLock") or "")).strip()
+                n=int(scene["sceneNumber"]); image=str(root/f"identity-probe-{n}.png"); image_task={"id":""}
                 illustrate(
                     str(reference),scene,image,True,
                     on_task_created=lambda task_id,**retry:(
