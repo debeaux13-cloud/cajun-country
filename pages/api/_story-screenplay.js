@@ -1,0 +1,72 @@
+import {getVercelOidcToken} from '@vercel/oidc';
+
+async function gatewayToken(){
+  if(process.env.AI_GATEWAY_API_KEY)return process.env.AI_GATEWAY_API_KEY;
+  const oidc=await getVercelOidcToken();
+  if(oidc)return oidc;
+  throw new Error('Vercel AI Gateway auth missing');
+}
+
+function stripFence(value){
+  return String(value||'').trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+}
+
+function validateScene(scene,index){
+  const n=index+1;
+  if(Number(scene?.sceneNumber)!==n)throw new Error(`Scene ${n} numbering invalid`);
+  for(const key of ['narration','description','setting','visibleAction','camera','emotionalTone']){
+    if(String(scene?.[key]||'').trim().length<12)throw new Error(`Scene ${n} missing ${key}`);
+  }
+  if(/^\s*(scene|chapter)\s*\d+/i.test(String(scene.narration)))throw new Error(`Scene ${n} narration contains internal labels`);
+  if(!Array.isArray(scene.characters)||!scene.characters.length)throw new Error(`Scene ${n} missing characters`);
+  if(!Array.isArray(scene.requiredVisibleDetails)||scene.requiredVisibleDetails.length<4)throw new Error(`Scene ${n} needs visible details`);
+  if(!Array.isArray(scene.keyActionVerbs)||scene.keyActionVerbs.length<3)throw new Error(`Scene ${n} needs action verbs`);
+  if(!Array.isArray(scene.motionBeats)||scene.motionBeats.length!==3)throw new Error(`Scene ${n} needs exactly three motion beats`);
+  const narrationWords=String(scene.narration).trim().split(/\s+/).filter(Boolean).length;
+  if(narrationWords<20||narrationWords>42)throw new Error(`Scene ${n} narration must be 20-42 words`);
+  return {
+    sceneNumber:n,
+    title:String(scene.title||'').trim(),
+    narration:String(scene.narration).trim(),
+    description:String(scene.description).trim(),
+    setting:String(scene.setting).trim(),
+    characters:scene.characters.map(x=>String(x).trim()).filter(Boolean),
+    supportingCharacters:Array.isArray(scene.supportingCharacters)?scene.supportingCharacters.map(x=>String(x).trim()).filter(Boolean):[],
+    visibleAction:String(scene.visibleAction).trim(),
+    camera:String(scene.camera).trim(),
+    emotionalTone:String(scene.emotionalTone).trim(),
+    keyActionVerbs:scene.keyActionVerbs.map(x=>String(x).trim()).filter(Boolean).slice(0,8),
+    requiredVisibleDetails:scene.requiredVisibleDetails.map(x=>String(x).trim()).filter(Boolean),
+    motionBeats:scene.motionBeats.map(x=>String(x).trim()),
+    identityLock:String(scene.identityLock||'Preserve the uploaded subject identity, species, anatomy, coat/hair/skin pattern, facial structure, limb count, tail length, ear shape, eye color, clothing/accessories, and proportions. Never hybridize the subject with another species or invent body parts.').trim(),
+    actionDensity:Math.max(7,Math.min(10,Number(scene.actionDensity||9))),
+    staticLevel:0,
+    hero_scene:true,
+    animationProvider:'runway-gen4-turbo'
+  };
+}
+
+export async function compileStoryScreenplay(story,moods=[]){
+  const token=await gatewayToken();
+  const system=`You are the production screenplay compiler for Main Character Studios by Tiffani. Convert the customer's edited story into EXACTLY 18 JSON scenes for a 3-minute personalized animated-feature movie, 10 seconds each. Return JSON only: {"title":"...","scenes":[...]}.\n\nHARD FILM RULES:\n- Scenes 1-6 form the free 60-second opening and must end on an irresistible continuation beat, not an ending. Scenes 7-18 complete the middle, climax, payoff and satisfying ending.\n- This must feel like an actual short animated film worth $49, not a slideshow or moving portrait gallery. Every scene advances the plot with a materially new event.\n- Narration must be rich enough to tell a real story: 20-42 spoken words per scene. Never say or display internal labels such as Scene 1, Scene 2, Chapter, shot number, camera instructions, or production notes.\n- Every scene must have a specific setting, composition, props, supporting characters when the story calls for them, environmental details, and a visible action that exactly matches the narration.\n- Do not repeatedly reuse the uploaded reference pose/background as the scene composition. The upload is identity reference only. Each scene illustration must be a newly composed story frame.\n- Preserve subject identity and anatomy exactly across all scenes. Never create species hybrids, duck feet on a dog, altered muzzle/face, extra or missing limbs, invented long tails, changed ear shape, coat/color drift, or human/animal anatomy swaps.\n- Style: polished cinematic animated feature, dimensional and expressive, visually rich, between flat children's cartoon and photoreal live action. Never photoreal and never cheap kiddie-cartoon.\n- The main character must visibly move and physically interact. Camera movement, wind, particles, water, or moving scenery do not count as hero action.\n- Each visibleAction must describe a full-body physical action with position change and interaction.\n- motionBeats must contain exactly 3 strings for 0-3s, 3-7s, 7-10s, each describing what the character physically does.\n- requiredVisibleDetails must include at least four concrete scene-specific things that must literally appear.\n- keyActionVerbs must contain at least three strong physical verbs.\n- camera must support the action without replacing it.\n- Avoid repeating the same setting/composition/action in adjacent scenes.\n\nEach scene object must include: sceneNumber, title, narration, description, setting, characters, supportingCharacters, visibleAction, camera, emotionalTone, keyActionVerbs, requiredVisibleDetails, motionBeats, identityLock, actionDensity.`;
+  const r=await fetch('https://ai-gateway.vercel.sh/v1/chat/completions',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+    body:JSON.stringify({
+      model:'openai/gpt-4o-mini',
+      response_format:{type:'json_object'},
+      temperature:.65,
+      messages:[{role:'system',content:system},{role:'user',content:`Customer edited story:\n${String(story||'').trim()}\n\nSelected moods: ${Array.isArray(moods)?moods.join(', '):''}`}]
+    })
+  });
+  const j=await r.json();
+  if(!r.ok)throw new Error(j?.error?.message||'Story screenplay compiler failed');
+  let parsed;
+  try{parsed=JSON.parse(stripFence(j?.choices?.[0]?.message?.content||''))}catch{throw new Error('Story screenplay compiler returned invalid JSON')}
+  if(!Array.isArray(parsed?.scenes)||parsed.scenes.length!==18)throw new Error('Story screenplay must contain exactly 18 scenes');
+  const scenes=parsed.scenes.map(validateScene);
+  const settings=scenes.map(s=>s.setting.toLowerCase());
+  let adjacentRepeats=0;for(let i=1;i<settings.length;i++)if(settings[i]===settings[i-1])adjacentRepeats++;
+  if(adjacentRepeats>1)throw new Error('Story screenplay repeats too many adjacent settings');
+  return {version:4,title:String(parsed.title||'Main Character Studios Movie').trim(),scenes};
+}
