@@ -65,23 +65,22 @@ export default function Create(){
   function clearDraftContext(){setDrafts([]);setSelectedDraftIndex(-1)}
   const chooseVibe=next=>{if(next!==vibe){setVibe(next);if(drafts.length)setStatus('Vibe updated for your next draft. Your saved drafts are unchanged.')}};
   const changeIdea=value=>{setIdea(value);if(drafts.length)setStatus('Optional story text updated for your next draft. Your saved drafts are unchanged.')};
-  const changeSelectedPlan=value=>setDrafts(current=>current.map((draft,index)=>index===selectedDraftIndex?{...draft,plan:value}:draft));
+  const changeSelectedPlan=value=>setDrafts(current=>current.map((draft,index)=>index===selectedDraftIndex?{...draft,plan:value,storyBrief:value,originalIdea:value,creativeMode:'my_story'}:draft));
 
   async function stage(){
     if(stageRequest.current)return;
-    if(draftsUsed>=3){setStatus('You have all 3 story options. Choose your favorite before starting the free video preview.');return}
     if(!image){setStatus('Add the individual or group photo first so Stage can build the story around everyone in it.');return}
     if(checkingPhoto){setStatus('Give us a moment to finish checking that photo.');return}
     if(photoCheck?.status==='retry_required'){setStatus('Choose another photo before creating the story. The current photo does not show enough reliable identity detail.');return}
-    const draftAttempt=draftsUsed+1;
+    const draftAttempt=Math.min(3,draftsUsed+1);
     const priorStoryBriefs=drafts.map(draft=>draft.storyBrief).filter(Boolean);
     const priorSourceLedgers=drafts.map(draft=>draft.sourceLedger).filter(Boolean);
     const requestMode=idea.trim()?'my_story':'make_for_me';
     stageRequest.current=true;
     setBusy(true);
     setStatus(requestMode==='make_for_me'
-      ?`Creating story option ${draftAttempt} of 3 around everyone in your photo. This usually takes a moment.`
-      :`Creating story option ${draftAttempt} of 3 while preserving your ideas. This usually takes a moment.`);
+      ?'Writing one complete story around everyone in your photo…'
+      :'Turning your idea into one complete story…');
     try{
       const requestIdea=idea;
       const requestMoods=[vibe];
@@ -91,10 +90,10 @@ export default function Create(){
       const resolvedAttempt=Math.max(1,Math.min(3,Number(result.draftAttempt)||draftAttempt));
       const resolvedMode=result.creativeMode==='make_for_me'||result.creativeMode==='my_story'?result.creativeMode:requestMode;
       const draft={attempt:resolvedAttempt,title:result.title||`Draft ${resolvedAttempt}`,plan:result.plan,storyBrief:result.storyBrief??requestIdea,sourceLedger:result.sourceLedger??null,originalIdea:requestIdea,moods:requestMoods,creativeMode:resolvedMode};
-      setDrafts(current=>[...current,draft]);
-      setSelectedDraftIndex(drafts.length);
+      setDrafts([draft]);
+      setSelectedDraftIndex(0);
       setDraftsUsed(current=>Math.max(current,resolvedAttempt));
-      setStatus(`Story option ${resolvedAttempt} of 3 is ready. Choose it, request another option, or review the details before previewing.`);
+      setStatus('Your story is ready. Change anything you want, then preview it.');
     }catch(error){setStatus(error.message)}finally{stageRequest.current=false;setBusy(false)}
   }
 
@@ -169,7 +168,7 @@ export default function Create(){
       <h1 className='createTitle' style={{fontFamily:'Georgia,serif',fontSize:'clamp(40px,7vw,70px)',marginBottom:8}}>Make them the main character.</h1>
       <p className='createSubtitle' style={{fontSize:18,opacity:.85}}>AI Story Chat included · 3-minute personalized moving movie · first 60 seconds free</p>
       <section className='createCard' style={{marginTop:24,background:'#19121f',border:'1px solid #3d2d49',borderRadius:24,padding:20}}>
-        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>STAGE · YOUR AI STORY PARTNER · INCLUDED</b><div style={{opacity:.7}}>Add a photo, choose one vibe, and optionally share anything from a tiny idea to a whole story. You’ll choose the story before any video is made.</div></div></div>
+        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>STAGE · YOUR AI STORY PARTNER · INCLUDED</b><div style={{opacity:.7}}>Add a photo and choose a vibe. The AI writes one complete story for you to read and edit before the video is made.</div></div></div>
         {busy&&<div className='workingToast' role='status' aria-live='polite'><span className='workingSpinner'/><span>{status||'Creating your story…'}</span></div>}
 
         <div style={{margin:'18px 0'}}>
@@ -182,29 +181,26 @@ export default function Create(){
 
         <fieldset className='vibePicker' disabled={busy} style={{border:0,padding:0,margin:'18px 0'}}><legend style={{fontWeight:800,marginBottom:8}}>Choose one vibe</legend><div className='vibeButtons' style={{display:'flex',gap:8,flexWrap:'wrap'}}>{VIBES.map(option=><button className='vibeButton' type='button' key={option.value} aria-pressed={vibe===option.value} onClick={()=>chooseVibe(option.value)} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,background:vibe===option.value?'#7b2cff':'#2b2135',color:'#fff',border:vibe===option.value?'2px solid #b994ff':'1px solid #5c4470'}}>{option.label}</button>)}</div></fieldset>
 
-        <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>Optional: add an idea or paste a whole story</label>
-        <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} placeholder='Leave blank and Stage will invent it, type a short theme, paste messy kid writing, or add your complete story.' style={{width:'100%',minHeight:130,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
-
-        {!drafts.length&&draftsUsed<3&&<button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>}
+        {!selectedDraft&&<>
+          <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>Optional: give the AI an idea</label>
+          <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} placeholder='Leave this blank and the AI will surprise you, or type something simple like “a magical rodeo.”' style={{width:'100%',minHeight:120,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
+          <button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>
+        </>}
         <p className='statusLine' style={{minHeight:24}}>{status}</p>
-        {!drafts.length&&draftsUsed>=3&&<p style={{padding:12,borderRadius:12,background:'#2b2135'}}>All 3 story options are ready. Choose your favorite.</p>}
         {selectedDraft&&<>
-          <h3>Choose your favorite story</h3>
-          <div className='draftTabs' style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{drafts.map((draft,index)=><button className='draftButton' type='button' disabled={busy} key={`${draft.attempt}-${index}`} onClick={()=>setSelectedDraftIndex(index)} aria-pressed={index===selectedDraftIndex} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,color:'#fff',background:index===selectedDraftIndex?'#7b2cff':'#2b2135',border:'1px solid #5c4470'}}>Option {draft.attempt} of 3</button>)}</div>
-          <article className='storyChoice'>
-            <div className='optionLabel'>YOUR 3-MINUTE STORY</div>
-            <h2>{selectedDraft.title||`Story option ${selectedDraft.attempt}`}</h2>
-            <p>{selectedDraft.storyBrief}</p>
-          </article>
-          <details className='planDetails'>
-            <summary>Review or edit scene details (optional)</summary>
-            <p>Want a precise change? Edit anything here—for example, change a horse to a unicorn or rewrite an event.</p>
-            <textarea className='storyInput planInput' disabled={busy} value={selectedDraft.plan} onChange={event=>changeSelectedPlan(event.target.value)} style={{width:'100%',minHeight:360,padding:14,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box'}}/>
-          </details>
-          {draftsUsed<3&&<button className='secondaryButton' disabled={busy} onClick={stage} style={{marginTop:12,padding:'12px 18px',borderRadius:999,fontWeight:900}}>{busy?'Creating another story…':'Create another story option'}</button>}
-          {draftsUsed>=3&&<p>You have all 3 story options. Select the one you like best.</p>}
-          <p className='simplePreviewCopy'>Compare up to three written stories. When you choose one, we’ll make one free 60-second video preview. Buying continues that same story to the full 3 minutes.</p>
-          <button className='previewButton' disabled={busy||!photoCheck?.previewEntitlement} onClick={preview} style={{marginTop:8,padding:'15px 22px',borderRadius:999,fontWeight:900}}>Preview this story free →</button>
+          <div className='storyHeading'>
+            <div>
+              <div className='optionLabel'>YOUR STORY</div>
+              <h2>{selectedDraft.title||'Your Main Character Story'}</h2>
+            </div>
+          </div>
+          <p className='editHelp'>Read it, change anything you want directly in the box, then preview it. For example: “change the horse to a unicorn.”</p>
+          <textarea className='storyInput customerStory' disabled={busy} value={selectedDraft.storyBrief||selectedDraft.plan} onChange={event=>changeSelectedPlan(event.target.value)} style={{width:'100%',minHeight:280,padding:18,borderRadius:18,boxSizing:'border-box',fontSize:17}}/>
+          <div className='storyActions'>
+            {draftsUsed<3&&<button className='secondaryButton' disabled={busy} onClick={stage}>{busy?'Writing a different story…':'Make a different story'}</button>}
+            <button className='previewButton' disabled={busy||!photoCheck?.previewEntitlement} onClick={preview}>Preview My Movie Free →</button>
+          </div>
+          <p className='simplePreviewCopy'>Watch the first 60 seconds. Love it? Buy the full 3-minute movie and matching storybook PDF. Want a change? Edit this story before previewing.</p>
         </>}
       </section>
     </div>
@@ -235,7 +231,7 @@ export default function Create(){
       button:disabled{opacity:.52;cursor:not-allowed!important}
       .statusLine{color:#5b267d;font-weight:800;line-height:1.45}
       .photoResult{color:#fff!important}
-      .storyChoice{border:1px solid #eadbe9;border-radius:22px;padding:22px;background:linear-gradient(135deg,#fffaf7,#f8effb);margin-bottom:16px}
+      .storyHeading h2{font-family:Georgia,serif;font-size:34px;line-height:1.05;margin:7px 0 12px}.editHelp{color:#66566e;line-height:1.5}.customerStory{background:linear-gradient(135deg,#fffaf7,#fbf4ff)!important}.storyActions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}.storyActions button{padding:14px 20px;border-radius:999px;font-weight:900}
       .storyChoice h2{font-family:Georgia,serif;font-size:32px;line-height:1.05;margin:8px 0 12px}
       .storyChoice p{font-size:17px;line-height:1.6;color:#55475d;margin:0}
       .optionLabel{font-size:12px;letter-spacing:2px;font-weight:900;color:#7a2ab8}
