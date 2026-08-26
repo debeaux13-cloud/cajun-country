@@ -4,6 +4,7 @@ import os, tempfile, time, uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import requests, runpod
+from audio_polish import add_background_music
 from pipeline_steps import build_movie, build_pdf, illustrate, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
 from runway_adapter import RunwayGen4Turbo
 
@@ -151,7 +152,7 @@ def handler(event):
                     fut={ex.submit(render_scene,root,reference,s,i):i-1 for i,s in enumerate(scenes,start=1)}
                     for f in as_completed(fut):rendered[fut[f]]=f.result()
                 images=[x[0] for x in rendered]; narr=[x[1] for x in rendered]; sounds=[x[2] for x in rendered]; vids=[x[3] for x in rendered]; validate_unique_scene_images(images)
-                update("assembling"); movie=str(root/"preview.mp4"); build_movie(vids,narr,folder,movie,60,sound_effect_paths=sounds); verify_movie(movie,60); upload("preview-movie",movie,content_type="video/mp4"); update("ready",status="ready",manifest=manifest)
+                update("assembling"); movie=str(root/"preview.mp4"); build_movie(vids,narr,folder,movie,60,sound_effect_paths=sounds); add_background_music(movie,folder,60); verify_movie(movie,60); upload("preview-movie",movie,content_type="video/mp4"); update("ready",status="ready",manifest=manifest)
                 return {"jobId":job_id,"status":"ready","mode":mode,"completed":6}
             if scene_count!=18 or movie_seconds!=180: raise ValueError("Live product must be 18 scenes / 180 seconds")
             rendered=[None]*18
@@ -164,7 +165,7 @@ def handler(event):
                 fut={ex.submit(render_scene,root,reference,s,i):i-1 for i,s in enumerate(scenes[6:],start=7)}
                 for f in as_completed(fut):rendered[fut[f]]=f.result()
             images=[x[0] for x in rendered]; narr=[x[1] for x in rendered]; sounds=[x[2] for x in rendered]; vids=[x[3] for x in rendered]; validate_unique_scene_images(images)
-            update("assembling"); movie=str(root/"story-video.mp4"); build_movie(vids,narr,folder,movie,180,sound_effect_paths=sounds); verify_movie(movie,180); upload("final-movie",movie,content_type="video/mp4")
+            update("assembling"); movie=str(root/"story-video.mp4"); build_movie(vids,narr,folder,movie,180,sound_effect_paths=sounds); add_background_music(movie,folder,180); verify_movie(movie,180); upload("final-movie",movie,content_type="video/mp4")
             update("verifying"); pdf=str(root/"storybook.pdf"); build_pdf(manifest,images,pdf); upload("storybook-pdf",pdf,content_type="application/pdf"); update("ready",status="ready",manifest=manifest)
             return {"jobId":job_id,"status":"ready","tier":"three_minute","completed":18,"movieSeconds":180}
     except Exception as e:
