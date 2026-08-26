@@ -1,1 +1,1 @@
-export default function handler(req,res){const hasFundedGatewayKey=!!process.env.AI_GATEWAY_API_KEY;res.status(hasFundedGatewayKey?200:503).json({ok:hasFundedGatewayKey,fundedGatewayKeyPresent:hasFundedGatewayKey,provider:'vercel-ai-gateway'});}
+export default function handler(req,res){const hasApiKey=!!process.env.AI_GATEWAY_API_KEY;const hasOidc=!!process.env.VERCEL_OIDC_TOKEN;const ok=hasApiKey||hasOidc;res.status(ok?200:503).json({ok,provider:'vercel-ai-gateway',auth:hasApiKey?'api-key':hasOidc?'oidc':'missing',apiKeyPresent:hasApiKey,oidcPresent:hasOidc});}
