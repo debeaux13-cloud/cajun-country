@@ -20,9 +20,11 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
-SCENES = 30
-MOVIE_SECONDS = 300
+SCENES = 18
+MOVIE_SECONDS = 180
 TRANSITION_SECONDS = 0.5
+MAX_NARRATION_TEMPO = 1.5
+NARRATION_END_PADDING_SECONDS = 0.2
 ELEVENLABS_TTS_ENDPOINT = "https://api.elevenlabs.io/v1/text-to-speech"
 ELEVENLABS_SFX_ENDPOINT = "https://api.elevenlabs.io/v1/sound-generation"
 ELEVENLABS_DEFAULT_MODEL = "eleven_flash_v2_5"
@@ -548,19 +550,23 @@ def _compact_prompt_value(value, limit: int) -> str:
 
 def locked_still_prompt(scene: dict) -> str:
     """Put identity, stylization, and scene truth inside Runway's hard 1,000-character limit."""
-    identity = _compact_prompt_value(scene.get("identityLock"), 320)
-    setting = _compact_prompt_value(scene.get("setting"), 65)
-    action = _compact_prompt_value(scene.get("visibleAction") or scene.get("description"), 90)
-    required = _compact_prompt_value(", ".join(scene.get("requiredVisibleDetails") or []), 80)
-    supporting = _compact_prompt_value(", ".join(scene.get("supportingCharacters") or []), 30)
+    # The API builds an evenly budgeted, scene-specific lock capped at 500
+    # characters. Keep that lock whole so the last IDs in a large group are
+    # never discarded merely because they occur after S1 in the prompt.
+    identity = _compact_prompt_value(scene.get("identityLock"), 500)
+    setting = _compact_prompt_value(scene.get("setting"), 48)
+    action = _compact_prompt_value(scene.get("visibleAction") or scene.get("description"), 65)
+    required = _compact_prompt_value(", ".join(scene.get("requiredVisibleDetails") or []), 48)
+    supporting = _compact_prompt_value(", ".join(scene.get("supportingCharacters") or []), 22)
     prompt = (
-        f"@Subject contains the exact uploaded heroes. IDENTITY LOCK: {identity}. "
-        "STYLE: warm stylized 3D CGI movie; rounded sculpted forms, clear weight/volume, appealing simplified faces, tactile hair/fur/fabric, soft light, gentle highlights, shallow depth; form via light/shadow, no hard outlines. Never photoreal/live-action or flat 2D/vector. "
-        f"SCENE: {setting}. ACTION: {action}. MUST SHOW: {required}. SUPPORTING: {supporting or 'only those named in the scene'}. "
-        "New 16:9 composition. Preserve each subject's exact build, colors, markings, face/muzzle, ears and tail. "
-        "Keep bodies and identities separate. No generic substitutes, anatomy swaps, source background, text, logo, collage, or duplicate."
+        f"@Subject=upload. LOCK: {identity}. "
+        "STYLE: warm dimensional stylized 3D CGI; tactile texture, soft cinematic depth; not photoreal or flat 2D. "
+        f"SET: {setting}. ACT: {action}. SHOW: {required}. EXTRAS: {supporting or 'scene-listed only'}. "
+        "New 16:9. Only locked upload IDs; exact and separate. No swaps, hybrids, duplicates, anatomy errors, source backdrop, text/logo/collage."
     )
-    return prompt[:1000].rstrip()
+    if len(prompt) > 1000:
+        raise ValueError("Locked still prompt exceeded Runway's 1,000-character limit")
+    return prompt.rstrip()
 
 
 def locked_motion_scene_prompt(scene: dict) -> str:
@@ -835,25 +841,52 @@ def build_sequence(video_paths: list[str], audio_paths: list[str], workdir: str,
     if sound_effect_paths is not None and len(sound_effect_paths) != len(video_paths):
         raise RuntimeError("A matching sound-effects file is required for every scene when effects are enabled.")
     scene_count = len(video_paths)
-    segment_seconds = (target_seconds + (scene_count - 1) * TRANSITION_SECONDS) / scene_count
+    if target_seconds <= 0:
+        raise RuntimeError("The movie target duration must be positive.")
+    # The final handoff is a straight concat, not an xfade graph.  The former
+    # formula added one transition allowance between every pair of scenes even
+    # though no overlap was applied.  That made six scenes total 62.5 seconds
+    # and eighteen scenes total 188.5 seconds; the final `-t` then removed the
+    # end of scene 6/18.  Give every scene its exact, non-overlapping share of
+    # the purchased runtime so all scene endings survive the duration guard.
+    segment_seconds = target_seconds / scene_count
     segments: list[str] = []
     for index, (video, audio) in enumerate(zip(video_paths, audio_paths), start=1):
         segment = str(Path(workdir) / f"segment-{index}.mp4")
-        probe = subprocess.run(
+        video_probe = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", video],
             check=True, capture_output=True, text=True, timeout=30,
         )
-        source_seconds = float(probe.stdout.strip())
+        source_seconds = float(video_probe.stdout.strip())
         if source_seconds <= 0:
             raise RuntimeError(f"Scene {index} has no positive video duration.")
         speed_factor = segment_seconds / source_seconds
         audio_seconds = segment_seconds - TRANSITION_SECONDS if hard_audio_cuts and index < scene_count else segment_seconds
+        narration_probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", audio],
+            check=True, capture_output=True, text=True, timeout=30,
+        )
+        narration_seconds = float(narration_probe.stdout.strip())
+        if narration_seconds <= 0:
+            raise RuntimeError(f"Scene {index} has no positive narration duration.")
+        narration_window = audio_seconds - NARRATION_END_PADDING_SECONDS
+        if narration_window <= 0:
+            raise RuntimeError(f"Scene {index} has no usable narration window.")
+        narration_tempo = max(1.0, narration_seconds / narration_window)
+        if narration_tempo > MAX_NARRATION_TEMPO:
+            raise RuntimeError(
+                f"Scene {index} narration is {narration_seconds:.2f}s and would need {narration_tempo:.2f}x speech to fit its "
+                f"{audio_seconds:.2f}s scene. The safe limit is {MAX_NARRATION_TEMPO:.2f}x; assembly stopped instead of cutting off words."
+            )
+        narration_filters = ""
+        if narration_tempo > 1.001:
+            narration_filters = f"atempo={narration_tempo:.8f},"
         command = ["ffmpeg", "-y", "-i", video, "-i", audio]
         if sound_effect_paths is not None:
             command += ["-i", sound_effect_paths[index - 1]]
-            audio_filter = f"[1:a]apad,atrim=duration={audio_seconds},asetpts=PTS-STARTPTS[n];[2:a]volume=0.16,afade=t=in:st=0:d=0.35,afade=t=out:st={max(0.0, segment_seconds - 0.5)}:d=0.5,apad,atrim=duration={segment_seconds},asetpts=PTS-STARTPTS[fx];[n][fx]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0[a]"
+            audio_filter = f"[1:a]{narration_filters}apad,atrim=duration={audio_seconds},asetpts=PTS-STARTPTS[n];[2:a]volume=0.16,afade=t=in:st=0:d=0.35,afade=t=out:st={max(0.0, segment_seconds - 0.5)}:d=0.5,apad,atrim=duration={segment_seconds},asetpts=PTS-STARTPTS[fx];[n][fx]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0[a]"
         else:
-            audio_filter = f"[1:a]apad,atrim=duration={audio_seconds},asetpts=PTS-STARTPTS[a]"
+            audio_filter = f"[1:a]{narration_filters}apad,atrim=duration={audio_seconds},asetpts=PTS-STARTPTS[a]"
         command += [
             "-filter_complex", f"[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,setpts={speed_factor}*PTS,trim=duration={segment_seconds},fps=30,setpts=PTS-STARTPTS[v];{audio_filter}",
             "-map", "[v]", "-map", "[a]", "-t", str(segment_seconds), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart", segment,
@@ -864,13 +897,19 @@ def build_sequence(video_paths: list[str], audio_paths: list[str], workdir: str,
     # decoded stream at once and can exhaust the serverless worker during the
     # final handoff even though every scene has already rendered successfully.
     # The segments above are normalized to identical H.264/AAC parameters, so
-    # concatenate them incrementally with the demuxer. This is bounded-memory,
-    # deterministic, and preserves every completed provider result.
+    # concatenate them incrementally with the demuxer. Keep the already encoded
+    # video as a bounded-memory stream copy, but rebuild one continuous AAC
+    # timeline. Copying each segment's AAC encoder delay verbatim produces a
+    # non-monotonic DTS correction at every boundary and can create tiny audio
+    # overlaps. Resetting timestamps from the decoded sample count preserves all
+    # narration/SFX samples while giving the final file one clean audio clock.
     concat_file = Path(workdir) / "segments.txt"
     concat_file.write_text("\n".join(f"file '{Path(segment).name}'" for segment in segments), encoding="utf-8")
     subprocess.run([
         "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file),
-        "-t", str(target_seconds), "-c", "copy", "-movflags", "+faststart", destination,
+        "-map", "0:v:0", "-map", "0:a:0", "-c:v", "copy",
+        "-af", f"aresample=async=1:first_pts=0,asetpts=N/SR/TB,apad,atrim=duration={target_seconds}",
+        "-c:a", "aac", "-t", str(target_seconds), "-movflags", "+faststart", destination,
     ], check=True, timeout=1200, cwd=workdir)
     return destination
 

@@ -4,11 +4,11 @@ import os, tempfile, time, uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import requests, runpod
-from audio_polish import add_background_music
+from audio_polish import add_background_music, create_background_music, normalize_music_vibe
 from pipeline_steps import build_movie, build_pdf, illustrate, locked_motion_scene_prompt, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
 from runway_adapter import RunwayGen4Turbo
 
-BUNDLE_VERSION="2026-08-26-mcs-v18-multi-subject-3d-cgi-video-lock"
+BUNDLE_VERSION="2026-08-26-mcs-v18-ai-story-director-stylized-family-final"
 
 def req(name):
     v=os.environ.get(name,"").strip()
@@ -23,7 +23,7 @@ def auth_headers(content_type=None):
 def handler(event):
     payload=event.get("input") or event
     if str(payload.get("action") or "")=="version":
-        return {"status":"ready","bundleVersion":BUNDLE_VERSION,"product":"$49 / 3 minutes / 18 scenes","previewScenes":6,"paidContinuationScenes":12,"directBlobUploads":True,"soundEffects":True,"backgroundMusic":True,"weakMotionRetry":1}
+        return {"status":"ready","bundleVersion":BUNDLE_VERSION,"product":"$49 / 3 minutes / 18 scenes","previewScenes":6,"paidContinuationScenes":12,"directBlobUploads":True,"soundEffects":True,"backgroundMusic":True,"vibeAwareMusic":True,"previewMusicContinuity":True,"weakMotionRetry":1,"exactSceneRuntime":True,"narrationEndProtection":True,"maxReferenceSubjects":12}
     if payload.get("workerSecret"):os.environ["MCS_WORKER_SECRET"]=str(payload["workerSecret"])
     job_id=str(payload.get("jobId") or "").strip(); mode=str(payload.get("mode") or "paid").strip(); callback=str(payload.get("callbackBase") or "").rstrip("/")
     identity_override=str(payload.get("identityOverride") or "").strip()
@@ -38,6 +38,8 @@ def handler(event):
     contract=job.get("contract") or {}
     if contract.get("petRouting")!="runway-gen4-turbo-only" or contract.get("animalPoseDetection") is not False: raise ValueError("Invalid MCS motion contract")
     scene_count=int(contract.get("scenes") or (6 if preview else 18)); movie_seconds=int(contract.get("movieSeconds") or (60 if preview else 180))
+    moods=job.get("moods") if isinstance(job.get("moods"),list) else []
+    selected_vibe=normalize_music_vibe(job.get("selectedVibe") or contract.get("musicVibe") or (moods[0] if moods else "surprise me"))
 
     def update(stage,scene=0,status="running",**extra):
         b={"stage":stage,"status":status,**extra}
@@ -169,8 +171,8 @@ def handler(event):
                     fut={ex.submit(render_scene,root,reference,s,i):i-1 for i,s in enumerate(scenes,start=1)}
                     for f in as_completed(fut):rendered[fut[f]]=f.result()
                 images=[x[0] for x in rendered]; narr=[x[1] for x in rendered]; sounds=[x[2] for x in rendered]; vids=[x[3] for x in rendered]; validate_unique_scene_images(images)
-                update("assembling"); movie=str(root/"preview.mp4"); build_movie(vids,narr,folder,movie,60,sound_effect_paths=sounds); add_background_music(movie,folder,60); verify_movie(movie,60); upload("preview-movie",movie,content_type="video/mp4"); update("ready",status="ready",manifest=manifest)
-                return {"jobId":job_id,"status":"ready","mode":mode,"completed":6}
+                update("assembling"); movie=str(root/"preview.mp4"); music=str(root/"preview-music-bed.mp3"); build_movie(vids,narr,folder,movie,60,sound_effect_paths=sounds); create_background_music(music,selected_vibe,30); upload("music-bed",music,content_type="audio/mpeg"); add_background_music(movie,folder,60,music_path=music,vibe=selected_vibe); verify_movie(movie,60); upload("preview-movie",movie,content_type="video/mp4"); update("ready",status="ready",manifest=manifest,musicVibe=selected_vibe,musicAsset="music-bed")
+                return {"jobId":job_id,"status":"ready","mode":mode,"completed":6,"musicVibe":selected_vibe,"musicContinuity":True}
             if scene_count!=18 or movie_seconds!=180: raise ValueError("Live product must be 18 scenes / 180 seconds")
             rendered=[None]*18
             for i,s in enumerate(scenes[:6],start=1):
@@ -182,9 +184,12 @@ def handler(event):
                 fut={ex.submit(render_scene,root,reference,s,i):i-1 for i,s in enumerate(scenes[6:],start=7)}
                 for f in as_completed(fut):rendered[fut[f]]=f.result()
             images=[x[0] for x in rendered]; narr=[x[1] for x in rendered]; sounds=[x[2] for x in rendered]; vids=[x[3] for x in rendered]; validate_unique_scene_images(images)
-            update("assembling"); movie=str(root/"story-video.mp4"); build_movie(vids,narr,folder,movie,180,sound_effect_paths=sounds); add_background_music(movie,folder,180); verify_movie(movie,180); upload("final-movie",movie,content_type="video/mp4")
+            update("assembling"); movie=str(root/"story-video.mp4"); music=str(root/"preview-music-bed.mp3"); build_movie(vids,narr,folder,movie,180,sound_effect_paths=sounds); music_continuity=download_if_present("music-bed",music)
+            if not music_continuity:
+                create_background_music(music,selected_vibe,30,allow_provider=False)
+            add_background_music(movie,folder,180,music_path=music,vibe=selected_vibe); verify_movie(movie,180); upload("final-movie",movie,content_type="video/mp4")
             update("verifying"); pdf=str(root/"storybook.pdf"); build_pdf(manifest,images,pdf); upload("storybook-pdf",pdf,content_type="application/pdf"); update("ready",status="ready",manifest=manifest)
-            return {"jobId":job_id,"status":"ready","tier":"three_minute","completed":18,"movieSeconds":180}
+            return {"jobId":job_id,"status":"ready","tier":"three_minute","completed":18,"movieSeconds":180,"musicVibe":selected_vibe,"musicContinuity":music_continuity}
     except Exception as e:
         try:update("manual_review",status="failed",error=str(e))
         except Exception:pass

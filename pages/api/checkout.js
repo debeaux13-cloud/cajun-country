@@ -15,7 +15,9 @@ async function verifiedPreview(jobId,mcsJobId){
     head(`mcs/jobs/${mcsJobId}/preview-movie.bin`,{token}),
     ...Array.from({length:6},(_,index)=>head(`mcs/jobs/${mcsJobId}/scene-video-${index+1}.bin`,{token}))
   ]);
-  if(assets[0].contentType!=='video/mp4'||Number(assets[0].size)<500*1024||assets.slice(1).some(asset=>asset.contentType!=='video/mp4'||Number(asset.size)<100*1024)){
+  let musicBed=null;
+  try{musicBed=await head(`mcs/jobs/${mcsJobId}/music-bed.bin`,{token})}catch{}
+  if(assets[0].contentType!=='video/mp4'||Number(assets[0].size)<500*1024||assets.slice(1).some(asset=>asset.contentType!=='video/mp4'||Number(asset.size)<100*1024)||(musicBed&&(musicBed.contentType!=='audio/mpeg'||Number(musicBed.size)<20*1024))){
     throw new Error('The free preview media is incomplete');
   }
 }
