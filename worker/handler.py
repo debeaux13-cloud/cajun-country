@@ -75,7 +75,7 @@ def handler(event):
     try:
         with tempfile.TemporaryDirectory(prefix=f"mcs-{mode}-{job_id}-") as folder:
             root=Path(folder); reference=root/"reference.jpg"; src=requests.get(job["assets"]["reference"],headers=auth_headers(),timeout=60); src.raise_for_status(); reference.write_bytes(src.content)
-            manifest=job.get("existingManifest") or {}; validate_story_plan(manifest,6 if preview else scene_count,1 if preview else None); scenes=list(manifest.get("scenes") or [])
+            manifest=job.get("existingManifest") or {}; validate_story_plan(manifest,6 if preview else scene_count,1); scenes=list(manifest.get("scenes") or [])
             if preview:
                 rendered=[None]*6
                 with ThreadPoolExecutor(max_workers=6) as ex:
