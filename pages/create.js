@@ -69,7 +69,7 @@ export default function Create(){
 
   async function stage(){
     if(stageRequest.current)return;
-    if(draftsUsed>=3){setStatus('You have all 3 Stage drafts. Choose your favorite and edit it freely before starting your one moving preview.');return}
+    if(draftsUsed>=3){setStatus('You have all 3 story options. Choose your favorite before starting the free video preview.');return}
     if(!image){setStatus('Add the individual or group photo first so Stage can build the story around everyone in it.');return}
     if(checkingPhoto){setStatus('Give us a moment to finish checking that photo.');return}
     if(photoCheck?.status==='retry_required'){setStatus('Choose another photo before creating the story. The current photo does not show enough reliable identity detail.');return}
@@ -80,8 +80,8 @@ export default function Create(){
     stageRequest.current=true;
     setBusy(true);
     setStatus(requestMode==='make_for_me'
-      ?`Stage is creating text Draft ${draftAttempt} of 3 around everyone in your photo. No video or Runway credits are used.`
-      :`Stage is creating text Draft ${draftAttempt} of 3 while preserving your facts and imagination. No video or Runway credits are used.`);
+      ?`Creating story option ${draftAttempt} of 3 around everyone in your photo. This usually takes a moment.`
+      :`Creating story option ${draftAttempt} of 3 while preserving your ideas. This usually takes a moment.`);
     try{
       const requestIdea=idea;
       const requestMoods=[vibe];
@@ -94,7 +94,7 @@ export default function Create(){
       setDrafts(current=>[...current,draft]);
       setSelectedDraftIndex(drafts.length);
       setDraftsUsed(current=>Math.max(current,resolvedAttempt));
-      setStatus(`Draft ${resolvedAttempt} of 3 is ready. Choose a favorite, edit anything you want, or try another text story before starting one moving preview.`);
+      setStatus(`Story option ${resolvedAttempt} of 3 is ready. Choose it, request another option, or review the details before previewing.`);
     }catch(error){setStatus(error.message)}finally{stageRequest.current=false;setBusy(false)}
   }
 
@@ -169,14 +169,15 @@ export default function Create(){
       <h1 className='createTitle' style={{fontFamily:'Georgia,serif',fontSize:'clamp(40px,7vw,70px)',marginBottom:8}}>Make them the main character.</h1>
       <p className='createSubtitle' style={{fontSize:18,opacity:.85}}>AI Story Chat included · 3-minute personalized moving movie · first 60 seconds free</p>
       <section className='createCard' style={{marginTop:24,background:'#19121f',border:'1px solid #3d2d49',borderRadius:24,padding:20}}>
-        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>STAGE · YOUR AI STORY PARTNER · INCLUDED</b><div style={{opacity:.7}}>Add a photo, choose one vibe, and optionally share anything from a tiny idea to a whole story. Stage writing uses no video credits.</div></div></div>
+        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>STAGE · YOUR AI STORY PARTNER · INCLUDED</b><div style={{opacity:.7}}>Add a photo, choose one vibe, and optionally share anything from a tiny idea to a whole story. You’ll choose the story before any video is made.</div></div></div>
+        {busy&&<div className='workingToast' role='status' aria-live='polite'><span className='workingSpinner'/><span>{status||'Creating your story…'}</span></div>}
 
         <div style={{margin:'18px 0'}}>
           <label style={{display:'block',fontWeight:800,marginBottom:8}}>Add one clear photo of the person, pet, family, or group starring in the movie</label>
           <div style={{fontSize:14,opacity:.72,marginBottom:8}}>Group photos are welcome. Up to 12 people and animals can be identified separately. Everyday phone pictures and screenshots are welcome—no studio setup, full-body pose, or eye contact required.</div>
           <div className='photoNote' role='note' style={{fontSize:14,fontWeight:800,lineHeight:1.45,margin:'10px 0',padding:'11px 13px',borderRadius:12,color:'#fff4cf',background:'#4a3512',border:'1px solid #d6a33b'}}>Photo quality matters: AI can only preserve features it can clearly see. Blurry, dark, cropped, distant/tiny, or obstructed people and pets may not match, so choose a clearer photo before continuing.</div>
           <input className='photoInput' type='file' disabled={busy||checkingPhoto} accept='image/jpeg,image/png,image/webp,image/heic,image/heif' onChange={file}/>{checkingPhoto&&<span style={{marginLeft:10}}>Checking photo…</span>}{image&&!checkingPhoto&&<span style={{marginLeft:10}}>✓ photo prepared</span>}
-          {photoCheck&&<div role={photoCheck.status==='retry_required'?'alert':'status'} style={{marginTop:12,padding:'12px 14px',borderRadius:14,lineHeight:1.45,border:`1px solid ${photoCheck.status==='good'?'#4cc38a':photoCheck.status==='caution'?'#d6a33b':'#ff6b6b'}`,background:photoCheck.status==='good'?'#153d2b':photoCheck.status==='caution'?'#4a3512':'#4a1d25'}}><strong>{photoCheck.status==='good'?'✓ This photo is usable':photoCheck.status==='caution'?'This photo is usable—with a heads-up':'Please try another photo'}</strong>{photoCheck.visiblePrincipalSubjectCount>0&&<span> · {photoCheck.visiblePrincipalSubjectCount} principal {photoCheck.visiblePrincipalSubjectCount===1?'subject':'subjects'} visible</span>}<div>{photoCheck.reason}</div><div style={{opacity:.82}}>{photoCheck.tip}</div></div>}
+          {photoCheck&&<div className='photoResult' role={photoCheck.status==='retry_required'?'alert':'status'} style={{marginTop:12,padding:'12px 14px',borderRadius:14,lineHeight:1.45,border:`1px solid ${photoCheck.status==='good'?'#4cc38a':photoCheck.status==='caution'?'#d6a33b':'#ff6b6b'}`,background:photoCheck.status==='good'?'#153d2b':photoCheck.status==='caution'?'#4a3512':'#4a1d25'}}><strong>{photoCheck.status==='good'?'✓ This photo is usable':photoCheck.status==='caution'?'This photo is usable—with a heads-up':'Please try another photo'}</strong>{photoCheck.visiblePrincipalSubjectCount>0&&<span> · {photoCheck.visiblePrincipalSubjectCount} principal {photoCheck.visiblePrincipalSubjectCount===1?'subject':'subjects'} visible</span>}<div>{photoCheck.reason}</div><div style={{opacity:.82}}>{photoCheck.tip}</div></div>}
         </div>
 
         <fieldset className='vibePicker' disabled={busy} style={{border:0,padding:0,margin:'18px 0'}}><legend style={{fontWeight:800,marginBottom:8}}>Choose one vibe</legend><div className='vibeButtons' style={{display:'flex',gap:8,flexWrap:'wrap'}}>{VIBES.map(option=><button className='vibeButton' type='button' key={option.value} aria-pressed={vibe===option.value} onClick={()=>chooseVibe(option.value)} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,background:vibe===option.value?'#7b2cff':'#2b2135',color:'#fff',border:vibe===option.value?'2px solid #b994ff':'1px solid #5c4470'}}>{option.label}</button>)}</div></fieldset>
@@ -184,19 +185,26 @@ export default function Create(){
         <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>Optional: add an idea or paste a whole story</label>
         <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} placeholder='Leave blank and Stage will invent it, type a short theme, paste messy kid writing, or add your complete story.' style={{width:'100%',minHeight:130,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
 
-        {!drafts.length&&draftsUsed<3&&<button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating Draft…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>}
+        {!drafts.length&&draftsUsed<3&&<button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>}
         <p className='statusLine' style={{minHeight:24}}>{status}</p>
-        {!drafts.length&&draftsUsed>=3&&<p style={{padding:12,borderRadius:12,background:'#2b2135'}}>All 3 Stage text drafts have been used in this page session.</p>}
+        {!drafts.length&&draftsUsed>=3&&<p style={{padding:12,borderRadius:12,background:'#2b2135'}}>All 3 story options are ready. Choose your favorite.</p>}
         {selectedDraft&&<>
-          <h3>Choose your favorite Stage draft</h3>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{drafts.map((draft,index)=><button className='draftButton' type='button' disabled={busy} key={`${draft.attempt}-${index}`} onClick={()=>setSelectedDraftIndex(index)} aria-pressed={index===selectedDraftIndex} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,color:'#fff',background:index===selectedDraftIndex?'#7b2cff':'#2b2135',border:'1px solid #5c4470'}}>Draft {draft.attempt}/3</button>)}</div>
-          <h3>Draft {selectedDraft.attempt}/3 · Your editable 3-minute plan</h3>
-          <p style={{opacity:.78}}>Make it yours before previewing. For example: “change the horse to a unicorn,” rewrite dialogue, or adjust any event.</p>
-          <textarea className='storyInput planInput' disabled={busy} value={selectedDraft.plan} onChange={event=>changeSelectedPlan(event.target.value)} style={{width:'100%',minHeight:360,padding:14,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box'}}/>
-          {draftsUsed<3&&<button className='secondaryButton' disabled={busy} onClick={stage} style={{marginTop:12,padding:'12px 18px',borderRadius:999,fontWeight:900}}>{busy?'Writing another text draft…':'Try another story'}</button>}
-          {draftsUsed>=3&&<p style={{opacity:.76}}>You have all 3 text drafts. Select the one you like best and edit it as much as you want.</p>}
-          <p style={{opacity:.72}}>These three choices are text-only and use no video or Runway credits. Your selected draft gets one free moving 60-second preview; after payment, that same story continues through scenes 7–18.</p>
-          <button className='previewButton' disabled={busy||!photoCheck?.previewEntitlement} onClick={preview} style={{marginTop:8,padding:'15px 22px',borderRadius:999,fontWeight:900}}>Make my one free moving preview →</button>
+          <h3>Choose your favorite story</h3>
+          <div className='draftTabs' style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>{drafts.map((draft,index)=><button className='draftButton' type='button' disabled={busy} key={`${draft.attempt}-${index}`} onClick={()=>setSelectedDraftIndex(index)} aria-pressed={index===selectedDraftIndex} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,color:'#fff',background:index===selectedDraftIndex?'#7b2cff':'#2b2135',border:'1px solid #5c4470'}}>Option {draft.attempt} of 3</button>)}</div>
+          <article className='storyChoice'>
+            <div className='optionLabel'>YOUR 3-MINUTE STORY</div>
+            <h2>{selectedDraft.title||`Story option ${selectedDraft.attempt}`}</h2>
+            <p>{selectedDraft.storyBrief}</p>
+          </article>
+          <details className='planDetails'>
+            <summary>Review or edit scene details (optional)</summary>
+            <p>Want a precise change? Edit anything here—for example, change a horse to a unicorn or rewrite an event.</p>
+            <textarea className='storyInput planInput' disabled={busy} value={selectedDraft.plan} onChange={event=>changeSelectedPlan(event.target.value)} style={{width:'100%',minHeight:360,padding:14,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box'}}/>
+          </details>
+          {draftsUsed<3&&<button className='secondaryButton' disabled={busy} onClick={stage} style={{marginTop:12,padding:'12px 18px',borderRadius:999,fontWeight:900}}>{busy?'Creating another story…':'Create another story option'}</button>}
+          {draftsUsed>=3&&<p>You have all 3 story options. Select the one you like best.</p>}
+          <p className='simplePreviewCopy'>Compare up to three written stories. When you choose one, we’ll make one free 60-second video preview. Buying continues that same story to the full 3 minutes.</p>
+          <button className='previewButton' disabled={busy||!photoCheck?.previewEntitlement} onClick={preview} style={{marginTop:8,padding:'15px 22px',borderRadius:999,fontWeight:900}}>Preview this story free →</button>
         </>}
       </section>
     </div>
@@ -226,6 +234,18 @@ export default function Create(){
       .draftButton[aria-pressed="true"]{color:#fff!important;background:#7a2ab8!important}
       button:disabled{opacity:.52;cursor:not-allowed!important}
       .statusLine{color:#5b267d;font-weight:800;line-height:1.45}
+      .photoResult{color:#fff!important}
+      .storyChoice{border:1px solid #eadbe9;border-radius:22px;padding:22px;background:linear-gradient(135deg,#fffaf7,#f8effb);margin-bottom:16px}
+      .storyChoice h2{font-family:Georgia,serif;font-size:32px;line-height:1.05;margin:8px 0 12px}
+      .storyChoice p{font-size:17px;line-height:1.6;color:#55475d;margin:0}
+      .optionLabel{font-size:12px;letter-spacing:2px;font-weight:900;color:#7a2ab8}
+      .planDetails{border:1px solid #ddcde1;border-radius:18px;padding:16px;background:#fff}
+      .planDetails summary{font-weight:900;color:#5b267d;cursor:pointer}
+      .planDetails>p{color:#6f6378;line-height:1.5}
+      .simplePreviewCopy{color:#55475d;line-height:1.55}
+      .workingToast{position:fixed;z-index:9999;left:50%;bottom:24px;transform:translateX(-50%);width:min(680px,calc(100% - 28px));display:flex;align-items:center;gap:12px;padding:16px 18px;border-radius:18px;background:#24152e;color:#fff;box-shadow:0 18px 55px rgba(36,21,46,.35);font-weight:900;line-height:1.4}
+      .workingSpinner{width:22px;height:22px;flex:0 0 22px;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:mcsSpin .8s linear infinite}
+      @keyframes mcsSpin{to{transform:rotate(360deg)}}
       .planInput{min-height:420px!important}
       @media(max-width:640px){
         .createShell{padding:16px!important}
