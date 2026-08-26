@@ -1,0 +1,1 @@
+export function runpod(){const e=process.env;const key=e.Run_Pod_Key||e.Run_Pod_key||e.RUNPOD_API_KEY;let base=e.MCS_LIVEPORTRAIT_WORKER_URL||'';base=base.replace(/\/(run|runsync|health|status)(\/.*)?$/,'');return{key,base}}
