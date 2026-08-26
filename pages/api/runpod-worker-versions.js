@@ -14,7 +14,10 @@ export default async function handler(req,res){
       desiredStatus:worker.desiredStatus||null,
       version:worker.version??worker.endpointVersion??null,
       createdAt:worker.createdAt||null,
-      startedAt:worker.startedAt||worker.lastStartedAt||null
+      startedAt:worker.startedAt||worker.lastStartedAt||null,
+      lastStatusChange:worker.lastStatusChange||null,
+      image:worker.image||null,
+      slsVersion:worker.slsVersion??null
     }));
     return res.status(200).json({
       id:endpoint.id,
