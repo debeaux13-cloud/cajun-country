@@ -95,7 +95,7 @@ export default function Preview(){
           <div className='spinner' aria-hidden='true'/>
           <div className='productionCopy'>
             <strong>{productionLabel}</strong>
-            <span>{numericProgress!==null?Math.round(numericProgress)+'% complete':'Working now · '+clock(elapsed)+' elapsed'}</span>
+            <span>{numericProgress!==null?Math.round(numericProgress)+'% complete':'Working now · '+clock(Math.max(elapsed,Number(job?.executionTime||0)/1000+Number(job?.delayTime||0)/1000))+' elapsed'}</span>
           </div>
           <div className={'progressTrack '+(numericProgress===null?'indeterminate':'')}>
             <div className='progressFill' style={numericProgress===null?undefined:{width:Math.max(4,numericProgress)+'%'}}/>
