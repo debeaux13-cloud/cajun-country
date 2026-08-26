@@ -91,7 +91,7 @@ export default async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:'POST only'});
   if(!authorized(req))return res.status(401).json({error:'Unauthorized'});
   const action=String(req.body?.action||'status');
-  if(!['status','patch','up'].includes(action))return res.status(400).json({error:'Unsupported action'});
+  if(!['status','patch','up','cap-one'].includes(action))return res.status(400).json({error:'Unsupported action'});
   const{key}=runpod();
   if(!key)return res.status(503).json({error:'RunPod key missing'});
   const headers={Authorization:`Bearer ${key}`,'Content-Type':'application/json'};
@@ -105,6 +105,15 @@ export default async function handler(req,res){
         endpoint:{id:ENDPOINT_ID,workersMin:before.endpoint.workersMin,workersMax:before.endpoint.workersMax,version:before.endpoint.version??null},
         workers:before.workers,job:before.job
       });
+    }
+
+    if(action==='cap-one'){
+      const cap=await fetch(`https://rest.runpod.io/v1/endpoints/${ENDPOINT_ID}`,{
+        method:'PATCH',headers,body:JSON.stringify({workersMin:0,workersMax:1})
+      });
+      const updated=await json(cap);
+      if(!cap.ok)return res.status(cap.status).json({error:'Worker cap failed'});
+      return res.status(200).json({ok:true,phase:'capped_at_one',workersMin:updated.workersMin??0,workersMax:updated.workersMax??1,endpointVersion:updated.version??null,job:before.job});
     }
 
     if(action==='patch'){
