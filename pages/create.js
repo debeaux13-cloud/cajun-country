@@ -70,17 +70,16 @@ export default function Create(){
   async function stage(){
     if(stageRequest.current)return;
     if(!image){setStatus('Add the individual or group photo first so Stage can build the story around everyone in it.');return}
+    if(!idea.trim()){setStatus('Type a story idea in the black AI Story Chat box before continuing.');return}
     if(checkingPhoto){setStatus('Give us a moment to finish checking that photo.');return}
     if(photoCheck?.status==='retry_required'){setStatus('Choose another photo before creating the story. The current photo does not show enough reliable identity detail.');return}
     const draftAttempt=Math.min(3,draftsUsed+1);
     const priorStoryBriefs=drafts.map(draft=>draft.storyBrief).filter(Boolean);
     const priorSourceLedgers=drafts.map(draft=>draft.sourceLedger).filter(Boolean);
-    const requestMode=idea.trim()?'my_story':'make_for_me';
+    const requestMode='my_story';
     stageRequest.current=true;
     setBusy(true);
-    setStatus(requestMode==='make_for_me'
-      ?'Writing one complete story around everyone in your photo…'
-      :'Turning your idea into one complete story…');
+    setStatus('Turning your idea into one complete story…');
     try{
       const requestIdea=idea;
       const requestMoods=[vibe];
@@ -168,7 +167,7 @@ export default function Create(){
       <h1 className='createTitle' style={{fontFamily:'Georgia,serif',fontSize:'clamp(40px,7vw,70px)',marginBottom:8}}>Make them the main character.</h1>
       <p className='createSubtitle' style={{fontSize:18,opacity:.85}}>AI Story Chat included · 3-minute personalized moving movie · first minute free</p>
       <section className='createCard' style={{marginTop:24,background:'#19121f',border:'1px solid #3d2d49',borderRadius:24,padding:20}}>
-        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>START HERE · AI STORY CHAT</b><div style={{opacity:.7}}>Upload a photo, pick a vibe, and use the one story box below. Leave it blank and the AI invents the story for you.</div></div></div>
+        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>START HERE · AI STORY CHAT</b><div style={{opacity:.7}}>Upload a photo, pick a vibe, then type what you want the story to be about in the black box below.</div></div></div>
         {busy&&<div className='workingToast' role='status' aria-live='polite'><span className='workingSpinner'/><span>{status||'Creating your story…'}</span></div>}
 
         <div style={{margin:'18px 0'}}>
@@ -182,9 +181,9 @@ export default function Create(){
         <fieldset className='vibePicker' disabled={busy} style={{border:0,padding:0,margin:'18px 0'}}><legend style={{fontWeight:800,marginBottom:8}}>Choose one vibe</legend><div className='vibeButtons' style={{display:'flex',gap:8,flexWrap:'wrap'}}>{VIBES.map(option=><button className='vibeButton' type='button' key={option.value} aria-pressed={vibe===option.value} onClick={()=>chooseVibe(option.value)} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,background:vibe===option.value?'#7b2cff':'#2b2135',color:'#fff',border:vibe===option.value?'2px solid #b994ff':'1px solid #5c4470'}}>{option.label}</button>)}</div></fieldset>
 
         {!selectedDraft&&<>
-          <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>AI Story Chat — tell it what to make (optional)</label>
-          <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} placeholder='Type one idea here—or leave this one box blank and the AI will invent your whole story.' style={{width:'100%',minHeight:120,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
-          <button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>
+          <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>TYPE YOUR STORY IDEA HERE</label>
+          <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} required aria-required='true' placeholder='TYPE HERE — for example: “Make a funny rodeo adventure starring everyone in my photo.”' style={{width:'100%',minHeight:120,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
+          <button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'||!idea.trim()} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>
         </>}
         <p className='statusLine' style={{minHeight:24}}>{status}</p>
         {selectedDraft&&<>
@@ -223,15 +222,15 @@ export default function Create(){
       .vibeButtons{gap:10px!important}
       .vibeButton{color:#24152e!important;background:#f7eef8!important;border:1px solid #d8c1e2!important;min-height:44px}
       .vibeButton[aria-pressed="true"]{color:#fff!important;background:linear-gradient(135deg,#ef5e72,#8c2bb6)!important;border-color:transparent!important;box-shadow:0 8px 20px rgba(122,42,184,.2)}
-      .storyInput{width:100%!important;border:1px solid #ddcde1!important;background:#fffaf7!important;color:#24152e!important;line-height:1.55;resize:vertical}
-      .storyInput::placeholder{color:#8a7c90}
+      .storyInput{width:100%!important;border:3px solid #24152e!important;background:#09070b!important;color:#fff!important;box-shadow:0 10px 28px rgba(36,21,46,.22);line-height:1.55;resize:vertical}
+      .storyInput::placeholder{color:#d8cfe0;font-weight:800}
       .primaryButton,.previewButton{border:0!important;color:#fff!important;background:linear-gradient(135deg,#ef5e72,#ef4b8c 45%,#8c2bb6)!important;box-shadow:0 12px 28px rgba(178,52,137,.22);cursor:pointer;font-size:16px}
       .secondaryButton,.draftButton{color:#5b267d!important;background:#f5eaf8!important;border:1px solid #d8c1e2!important;cursor:pointer}
       .draftButton[aria-pressed="true"]{color:#fff!important;background:#7a2ab8!important}
       button:disabled{opacity:.52;cursor:not-allowed!important}
       .statusLine{color:#5b267d;font-weight:800;line-height:1.45}
       .photoResult{color:#fff!important}
-      .storyHeading h2{font-family:Georgia,serif;font-size:34px;line-height:1.05;margin:7px 0 12px}.editHelp{color:#66566e;line-height:1.5}.customerStory{background:linear-gradient(135deg,#fffaf7,#fbf4ff)!important}.storyActions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}.storyActions button{padding:14px 20px;border-radius:999px;font-weight:900}
+      .storyHeading h2{font-family:Georgia,serif;font-size:34px;line-height:1.05;margin:7px 0 12px}.editHelp{color:#66566e;line-height:1.5}.customerStory{background:#09070b!important;color:#fff!important}.storyActions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}.storyActions button{padding:14px 20px;border-radius:999px;font-weight:900}
       .storyChoice h2{font-family:Georgia,serif;font-size:32px;line-height:1.05;margin:8px 0 12px}
       .storyChoice p{font-size:17px;line-height:1.6;color:#55475d;margin:0}
       .optionLabel{font-size:12px;letter-spacing:2px;font-weight:900;color:#7a2ab8}
