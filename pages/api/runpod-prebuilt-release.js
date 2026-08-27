@@ -11,6 +11,18 @@ function authorized(req){
   return got===TOKEN_HASH;
 }
 async function json(response){return response.json().catch(()=>({}));}
+async function verifyPublicImage(){
+  const url='https://ghcr.io/v2/debeaux13-cloud/cajun-country/manifests/mcs-worker-v23';
+  const accept='application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json';
+  let response=await fetch(url,{headers:{Accept:accept}});
+  if(response.status===401){
+    const tokenResponse=await fetch('https://ghcr.io/token?service=ghcr.io&scope=repository%3Adebeaux13-cloud%2Fcajun-country%3Apull');
+    const tokenPayload=await json(tokenResponse);
+    if(!tokenResponse.ok||!tokenPayload?.token)throw new Error(`Anonymous GHCR token failed (${tokenResponse.status})`);
+    response=await fetch(url,{headers:{Accept:accept,Authorization:`Bearer ${tokenPayload.token}`}});
+  }
+  if(!response.ok)throw new Error(`Prebuilt image is not anonymously pullable (${response.status})`);
+}
 function body(template){
   const value={
     containerDiskInGb:template.containerDiskInGb,
@@ -46,8 +58,7 @@ export default async function handler(req,res){
   const headers={Authorization:`Bearer ${key}`,'Content-Type':'application/json'};
   try{
     if(req.body?.action==='stage'){
-      const manifest=await fetch(`https://ghcr.io/v2/debeaux13-cloud/cajun-country/manifests/mcs-worker-v23`,{headers:{Accept:'application/vnd.oci.image.manifest.v1+json'}});
-      if(!manifest.ok)throw new Error(`Prebuilt image is not anonymously pullable (${manifest.status})`);
+      await verifyPublicImage();
       const response=await fetch(`https://rest.runpod.io/v1/templates/${TEMPLATE_ID}`,{headers});
       const template=await json(response);
       if(!response.ok)throw new Error(`Template lookup failed (${response.status})`);
