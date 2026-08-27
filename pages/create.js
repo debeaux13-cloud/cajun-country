@@ -168,7 +168,7 @@ export default function Create(){
       <h1 className='createTitle' style={{fontFamily:'Georgia,serif',fontSize:'clamp(40px,7vw,70px)',marginBottom:8}}>Make them the main character.</h1>
       <p className='createSubtitle' style={{fontSize:18,opacity:.85}}>AI Story Chat included · 3-minute personalized moving movie · first minute free</p>
       <section className='createCard' style={{marginTop:24,background:'#19121f',border:'1px solid #3d2d49',borderRadius:24,padding:20}}>
-        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>STAGE · YOUR AI STORY PARTNER · INCLUDED</b><div style={{opacity:.7}}>Add a photo and choose a vibe. The AI writes one complete story for you to read and edit before the video is made.</div></div></div>
+        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>START HERE · AI STORY CHAT</b><div style={{opacity:.7}}>Upload a photo, pick a vibe, and use the one story box below. Leave it blank and the AI invents the story for you.</div></div></div>
         {busy&&<div className='workingToast' role='status' aria-live='polite'><span className='workingSpinner'/><span>{status||'Creating your story…'}</span></div>}
 
         <div style={{margin:'18px 0'}}>
@@ -182,8 +182,8 @@ export default function Create(){
         <fieldset className='vibePicker' disabled={busy} style={{border:0,padding:0,margin:'18px 0'}}><legend style={{fontWeight:800,marginBottom:8}}>Choose one vibe</legend><div className='vibeButtons' style={{display:'flex',gap:8,flexWrap:'wrap'}}>{VIBES.map(option=><button className='vibeButton' type='button' key={option.value} aria-pressed={vibe===option.value} onClick={()=>chooseVibe(option.value)} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,background:vibe===option.value?'#7b2cff':'#2b2135',color:'#fff',border:vibe===option.value?'2px solid #b994ff':'1px solid #5c4470'}}>{option.label}</button>)}</div></fieldset>
 
         {!selectedDraft&&<>
-          <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>Optional: give the AI an idea</label>
-          <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} placeholder='Leave this blank and the AI will surprise you, or type something simple like “a magical rodeo.”' style={{width:'100%',minHeight:120,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
+          <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>AI Story Chat — tell it what to make (optional)</label>
+          <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} placeholder='Type one idea here—or leave this one box blank and the AI will invent your whole story.' style={{width:'100%',minHeight:120,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
           <button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>
         </>}
         <p className='statusLine' style={{minHeight:24}}>{status}</p>
@@ -214,7 +214,7 @@ export default function Create(){
       .createTitle{line-height:1!important;letter-spacing:-1.5px}
       .createSubtitle{color:#6f6378!important;opacity:1!important}
       .createCard{background:#fff!important;border:1px solid #eadbe9!important;box-shadow:0 24px 65px rgba(67,36,78,.12);padding:28px!important}
-      .stageIntro{padding:18px;border-radius:20px;background:linear-gradient(135deg,#f8e3e7,#eee0f8);align-items:flex-start!important}
+      .stageIntro{padding:4px 0 14px;border-bottom:3px solid #d75aa7;align-items:flex-start!important}.stageIntro b{display:block;font-size:24px;line-height:1.1;color:#5b267d}
       .stageIntro>div:last-child>div{color:#6f6378;opacity:1!important;margin-top:4px;line-height:1.45}
       .aiBadge{background:linear-gradient(135deg,#ef5e72,#8c2bb6)!important;color:#fff;flex:0 0 42px}
       .photoNote{color:#6b4b05!important;background:#fff7dc!important;border-color:#e8bf4f!important}
@@ -246,7 +246,7 @@ export default function Create(){
       @media(max-width:640px){
         .createShell{padding:16px!important}
         .createHeader{align-items:flex-start!important}
-        .createTitle{font-size:34px!important;line-height:1.05!important;margin-top:18px!important}
+        .createTitle{font-size:30px!important;line-height:1.05!important;margin-top:18px!important}
         .createSubtitle{font-size:15px!important;line-height:1.45}
         .createCard{padding:14px!important;border-radius:18px!important}
         .stageIntro{display:block!important}
