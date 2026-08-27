@@ -85,7 +85,7 @@ def handler(event):
         n=int(scene["sceneNumber"]); image=str(root/f"scene-{n}.png"); narration=str(root/f"narration-{n}.mp3"); sfx=str(root/f"sound-{n}.mp3"); video=str(root/f"scene-{n}.mp4")
         existing=(job.get("existingProviderJobs") or {}).get(str(n)) or {}
         image_task={"id":str(existing.get("imageProviderJobId") or "")}
-        if not (not preview and download_if_present("scene-image",image,n)):
+        if not download_if_present("scene-image",image,n):
             try:
                 illustrate(
                     str(reference),scene,image,True,
@@ -102,13 +102,13 @@ def handler(event):
                 raise
             upload("scene-image",image,n,"image/png")
         update("illustrating",n,"illustrated",provider="runway-gen4-image-turbo",providerJobId=image_task["id"])
-        if not (not preview and download_if_present("narration",narration,n)):
+        if not download_if_present("narration",narration,n):
             narrate(str(scene["narration"]),narration); upload("narration",narration,n,"audio/mpeg")
         update("narrating",n,"narrated")
-        if not (not preview and download_if_present("sound-effect",sfx,n)):
+        if not download_if_present("sound-effect",sfx,n):
             sound_effect(scene,sfx); upload("sound-effect",sfx,n,"audio/mpeg")
         update("sound",n,"ready")
-        if not preview and download_if_present("scene-video",video,n):
+        if download_if_present("scene-video",video,n):
             try:
                 verify_obvious_clip_motion(video)
                 update("animating",n,"animated",provider="runway-gen4-turbo",providerJobId=str(existing.get("animationProviderJobId") or existing.get("providerJobId") or ""))
@@ -166,7 +166,7 @@ def handler(event):
                 update("identity_probe",n,"ready",provider="runway-gen4-image-turbo",providerJobId=image_task["id"])
                 return {"jobId":job_id,"status":"ready","mode":mode,"completed":1,"identityProbe":True}
             master=root/"character-master.png"
-            master_reused=(not preview and download_if_present("character-master",str(master)))
+            master_reused=download_if_present("character-master",str(master))
             if not master_reused:
                 master_task={"id":""}
                 update("character_master")
