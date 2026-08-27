@@ -5,6 +5,10 @@ import{runpod}from'./_runpod';
 const TARGET='69efa6be-ef6d-426d-ac04-7dd28fd6d3f2';
 const ENDPOINT='id81aby9nfth9h';
 const ACCESS='mcs-receipt-20260827-7f9d1e6c';
+const TEMPLATE='2w5x8empgg';
+const SOURCE_BLOB='dea55f9f3a2ac67b375415a6b00ef365ad585b82';
+const SOURCE_COMMIT='d9297e151f0bbb9da0fc44dfaa005c6cfc656707';
+const BUNDLE_SHA='6c70294d070fc68b4ad0c0bb28361e1eca1d16b3e7067af2aac0ecb794380e27';
 
 async function readJson(pathname,token){
   const meta=await head(pathname,{token});
@@ -13,6 +17,7 @@ async function readJson(pathname,token){
   return response.json();
 }
 async function json(r){return r.json().catch(()=>({}))}
+function templateBody(t,command){const b={containerDiskInGb:t.containerDiskInGb,containerRegistryAuthId:t.containerRegistryAuthId||undefined,dockerEntrypoint:['/bin/bash','-lc'],dockerStartCmd:[command],env:t.env||{},imageName:t.imageName,isPublic:Boolean(t.isPublic),name:t.name,ports:t.ports||[],readme:t.readme||'',volumeInGb:t.volumeInGb||0,volumeMountPath:t.volumeMountPath||'/workspace'};for(const k of Object.keys(b))if(b[k]===undefined)delete b[k];return b}
 
 async function statusPayload(order,key,base){
   const headers={Authorization:`Bearer ${key}`};
@@ -48,7 +53,33 @@ export default async function handler(req,res){
     return res.status(response.ok?200:response.status).json({workerId:logWorker,http:response.status,logs:output.slice(-100000)});
   }
   if(req.method==='POST'){
-    if(String(req.body?.action||'')!=='requeue_paid_test')return res.status(400).json({error:'Unsupported action'});
+    const action=String(req.body?.action||'');
+    if(action==='fix_v20_startup'){
+      const headers={Authorization:`Bearer ${key}`,'Content-Type':'application/json'};
+      const templateResponse=await fetch(`https://rest.runpod.io/v1/templates/${TEMPLATE}`,{headers});
+      const current=await json(templateResponse);
+      if(!templateResponse.ok)return res.status(502).json({error:'Template lookup failed',http:templateResponse.status});
+      const blobUrl=`https://api.github.com/repos/debeaux13-cloud/cajun-country/git/blobs/${SOURCE_BLOB}`;
+      const py=`import base64,json,urllib.request;d=json.load(urllib.request.urlopen('${blobUrl}'));open('/tmp/mcs-v20.tgz','wb').write(base64.b64decode(d['content']))`;
+      const command=`set -euo pipefail; rm -rf /opt/mcs-bundle; mkdir -p /opt/mcs-bundle; python -c "${py}"; echo '${BUNDLE_SHA}  /tmp/mcs-v20.tgz' | sha256sum -c -; tar -xzf /tmp/mcs-v20.tgz -C /opt/mcs-bundle; export PYTHONPATH="/opt/mcs-bundle"; echo "MCS source commit: ${SOURCE_COMMIT}"; exec bash /opt/mcs-bundle/start.sh`;
+      const patched=await fetch(`https://rest.runpod.io/v1/templates/${TEMPLATE}`,{method:'PATCH',headers,body:JSON.stringify(templateBody(current,command))});
+      const patchedPayload=await json(patched);
+      if(!patched.ok)return res.status(502).json({error:'Template patch failed',http:patched.status,payload:patchedPayload});
+      const down=await fetch(`https://rest.runpod.io/v1/endpoints/${ENDPOINT}`,{method:'PATCH',headers,body:JSON.stringify({workersMin:0,workersMax:0})});
+      const downPayload=await json(down);
+      return res.status(down.ok?200:502).json({ok:down.ok,phase:'short_startup_installed_workers_stopping',templateVersion:patchedPayload.version??null,endpointVersion:downPayload.version??null});
+    }
+    if(action==='activate_v20'){
+      const headers={Authorization:`Bearer ${key}`,'Content-Type':'application/json'};
+      const workersResponse=await fetch(`https://api.runpod.io/v2/serverless/${ENDPOINT}/workers`,{headers});
+      const workerPayload=await json(workersResponse);
+      const workers=Array.isArray(workerPayload?.workers)?workerPayload.workers:[];
+      if(workers.length)return res.status(409).json({error:'Workers still stopping',workers:workers.map(w=>({id:w.id,status:w.status,desiredStatus:w.desiredStatus}))});
+      const up=await fetch(`https://rest.runpod.io/v1/endpoints/${ENDPOINT}`,{method:'PATCH',headers,body:JSON.stringify({workersMin:0,workersMax:4})});
+      const payload=await json(up);
+      return res.status(up.ok?200:502).json({ok:up.ok,phase:'v20_active',endpointVersion:payload.version??null,payload});
+    }
+    if(action!=='requeue_paid_test')return res.status(400).json({error:'Unsupported action'});
     if(order.mode!=='test'||order.runpodJobId!=='dbf83f13-62f3-4288-846f-b3ee74490b68-u2')return res.status(409).json({error:'Exact queued test receipt no longer current'});
     const before=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{headers:{Authorization:`Bearer ${key}`}});
     const beforeJob=await json(before);
