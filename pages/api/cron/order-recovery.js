@@ -2,9 +2,11 @@ import crypto from 'crypto';
 import {head,list,put} from '@vercel/blob';
 import {runpod} from '../_runpod';
 import {orderRecoveryReason} from '../../../lib/order-recovery-reason';
+
 const ACTIVE=new Set(['IN_QUEUE','IN_PROGRESS']);
 const MAX_RECOVERIES=2;
 const COOLDOWN_MS=10*60*1000;
+const ELIGIBLE_AGE_MS=24*60*60*1000;
 const CANARY_SOURCE_JOB='9a9bf989-c81d-4dea-9a38-055e7ec9ed7b-u2';
 const CANARY_PATH='mcs/config/order-recovery-canary.json';
 
@@ -87,17 +89,28 @@ export default async function handler(req,res){
   const canary=await runRecoveryCanary(headers,base,token);
   const page=await list({prefix:'mcs/orders/',limit:100,token});
   const results=[];
-  for(const blob of page.blobs.slice(0,25)){
+  const recent=[...page.blobs]
+    .sort((left,right)=>new Date(right.uploadedAt||0).getTime()-new Date(left.uploadedAt||0).getTime())
+    .slice(0,25);
+  for(const blob of recent){
     try{
       const order=await readJson(blob.pathname,token);
       if(!order?.mcsJobId||!order?.stripeSessionId||!order?.runpodJobId)continue;
+      const createdAt=new Date(order.createdAt||0).getTime()||0;
+      if(!createdAt||Date.now()-createdAt>ELIGIBLE_AGE_MS){results.push({orderId:order.mcsJobId,action:'outside_recovery_window'});continue}
       const attempts=Number(order.recoveryAttempts||0);
       if(attempts>=MAX_RECOVERIES){results.push({orderId:order.mcsJobId,action:'max_recoveries'});continue}
       const lastRecovery=new Date(order.lastRecoveryAt||0).getTime()||0;
       if(Date.now()-lastRecovery<COOLDOWN_MS)continue;
       const response=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{headers});
       const job=await response.json().catch(()=>({}));
-      if(!response.ok){results.push({orderId:order.mcsJobId,action:'provider_unavailable'});continue}
+      if(!response.ok){
+        const reason=orderRecoveryReason(null,0,Date.now(),response.status);
+        if(!reason){results.push({orderId:order.mcsJobId,action:'provider_unavailable',providerHttp:response.status});continue}
+        const recovered=await requeue(order,reason,headers,base,token);
+        results.push({orderId:order.mcsJobId,action:'requeued',reason,newJobId:recovered.runpodJobId});
+        continue;
+      }
       const latest=ACTIVE.has(String(job.status||'').toUpperCase())?await latestProgressAt(order.mcsJobId,token):0;
       const reason=orderRecoveryReason(job,latest);
       if(!reason)continue;
