@@ -37,10 +37,6 @@ jobs:
             ghcr.io/debeaux13-cloud/cajun-country:mcs-worker-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Make image publicly pullable
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh api --method PATCH /user/packages/container/cajun-country -f visibility=public
       - name: Verify anonymous pull
         run: |
           docker logout ghcr.io
