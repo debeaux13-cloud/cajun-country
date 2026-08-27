@@ -82,17 +82,28 @@ export default function Create(){
       if(!response.ok)throw new Error(result.error||'Stage chat failed');
       setChatMessages(current=>[...current,{role:'assistant',content:result.reply}]);
       setNeedsClarification(Boolean(result.clarificationNeeded));
-      if(text)changeIdea([idea,text].filter(Boolean).join('\n'));
-      setStatus(result.clarificationNeeded?'Answer Stage’s one question, then create your story.':'Stage understands the photo and is ready to create your story.');
+      const nextIdea=text?[idea,text].filter(Boolean).join('\n'):idea;
+      if(text)changeIdea(nextIdea);
+      if(result.clarificationNeeded){
+        setStatus('Answer Stage’s one question. Your answer will start the story automatically.');
+      }else if(text&&result.readyToCreate){
+        setStatus('Stage has enough information. Creating your complete story now…');
+        await stage({ideaOverride:nextIdea,skipClarification:true,trigger:'ai_chat'});
+      }else{
+        setStatus('Stage understands the photo. Send an idea or choose a story type to begin.');
+      }
     }catch(error){setNeedsClarification(false);setStatus(error.message)}finally{setChatBusy(false)}
   }
 
-  async function stage(){
+  async function stage(options={}){
+    const ideaOverride=typeof options?.ideaOverride==='string'?options.ideaOverride:undefined;
+    const skipClarification=Boolean(options?.skipClarification);
+    const trigger=options?.trigger==='ai_chat'?'ai_chat':'story_button';
     if(stageRequest.current)return;
     if(!image){setStatus('Add the individual or group photo first so Stage can build the story around everyone in it.');return}
-    const completeIdea=[idea,chatInput].map(value=>String(value||'').trim()).filter(Boolean).join('\n');
+    const completeIdea=ideaOverride!==undefined?ideaOverride.trim():[idea,chatInput].map(value=>String(value||'').trim()).filter(Boolean).join('\n');
     if(!completeIdea&&!vibe){setStatus('Choose a story type or tell the AI your own idea before continuing.');return}
-    if(needsClarification){setStatus('Answer Stage’s question in the AI chat before creating the story.');return}
+    if(needsClarification&&!skipClarification){setStatus('Answer Stage’s question in the AI chat before creating the story.');return}
     if(checkingPhoto){setStatus('Give us a moment to finish checking that photo.');return}
     if(photoCheck?.status==='retry_required'){setStatus('Choose another photo before creating the story. The current photo does not show enough reliable identity detail.');return}
     const draftAttempt=Math.min(3,draftsUsed+1);
@@ -106,7 +117,7 @@ export default function Create(){
       const requestIdea=completeIdea;
       if(chatInput.trim()){setIdea(completeIdea);setChatInput('')}
       const requestMoods=[vibe||'surprise me'];
-      const response=await fetch('/api/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({creativeMode:requestMode,idea:requestIdea,moods:requestMoods,image:image||undefined,draftAttempt,priorStoryBriefs,priorSourceLedgers})});
+      const response=await fetch('/api/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({creativeMode:requestMode,idea:requestIdea,moods:requestMoods,image:image||undefined,draftAttempt,priorStoryBriefs,priorSourceLedgers,trigger})});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error||'Stage failed');
       const resolvedAttempt=Math.max(1,Math.min(3,Number(result.draftAttempt)||draftAttempt));
@@ -219,7 +230,7 @@ export default function Create(){
             </div>
             <label htmlFor='story-input' className='typeHereLabel'>TYPE YOUR MESSAGE HERE</label>
             <textarea className='storyInput chatInput' id='story-input' disabled={busy||chatBusy} value={chatInput} onChange={event=>setChatInput(event.target.value)} placeholder='Tell Stage who everyone is, answer its question, or type your own story idea.'/>
-            <button className='sendChatButton' type='button' disabled={busy||chatBusy||!chatInput.trim()||!image} onClick={()=>talkToStage()}>Send to Stage</button>
+            <button className='sendChatButton' type='button' disabled={busy||chatBusy||!chatInput.trim()||!image} onClick={()=>talkToStage()}>Send to Stage &amp; Create My Story</button>
           </section>
           <button className='primaryButton' disabled={busy||chatBusy||checkingPhoto||needsClarification||photoCheck?.status==='retry_required'||(!idea.trim()&&!chatInput.trim()&&!vibe)} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>
         </>}

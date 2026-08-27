@@ -392,10 +392,14 @@ Return only the strict JSON requested by the schema. Do not add prose outside it
 
 export default async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:'POST only'});
+  const trigger=req.body?.trigger==='ai_chat'?'ai_chat':'story_button';
   try{
+    console.log('[stage-automation]',JSON.stringify({event:'started',trigger,draftAttempt:Number(req.body?.draftAttempt)||1,hasPhoto:Boolean(req.body?.image)}));
     const{plan,sourceLedger,title,storyBrief,differenceFromPriorDrafts,creativeMode,draftAttempt,auth}=await makePlan(req.body?.idea,req.body?.moods,req.body?.image,req.body?.draftAttempt,req.body?.priorStoryBriefs,req.body?.priorSourceLedgers);
+    console.log('[stage-automation]',JSON.stringify({event:'completed',trigger,draftAttempt,title}));
     return res.status(200).json({ok:true,plan,sourceLedger,title,storyBrief,differenceFromPriorDrafts,creativeMode,draftAttempt,provider:'vercel-ai-gateway',auth});
   }catch(error){
+    console.error('[stage-automation]',JSON.stringify({event:'failed',trigger,error:String(error?.message||error).slice(0,300)}));
     const status=/at least one thing|longer than|draft attempt|prior story|prior source|add a clear photo|reference|photo/i.test(String(error?.message||''))?400:503;
     return res.status(status).json({error:error.message});
   }
