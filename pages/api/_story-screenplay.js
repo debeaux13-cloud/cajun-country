@@ -398,7 +398,7 @@ export function validateCharacterBindings(sourceCoverage,allowedSubjectIds,scene
   return bindings;
 }
 
-function validateSourceCoverage(sourceCoverage,scenes,expectedFacts,allowedSubjectIds,subjectRoster){
+function validateSourceCoverage(sourceCoverage,scenes,expectedFacts,allowedSubjectIds,subjectRoster,creativeMode){
   if(!sourceCoverage||typeof sourceCoverage!=='object')throw new Error('Story screenplay is missing source coverage');
   const factTreatments=validateFactTreatments(sourceCoverage,scenes,expectedFacts);
   const removedFactIds=new Set(factTreatments.filter(item=>item.treatment==='removed').map(item=>item.factId));
@@ -424,11 +424,13 @@ function validateSourceCoverage(sourceCoverage,scenes,expectedFacts,allowedSubje
     const activeFacts=expectedFacts.filter(fact=>!removedFactIds.has(fact.id));
     const missing=activeFacts.filter(fact=>!sceneCoverage.has(fact.id)||!claimed.has(fact.id));
     if(missing.length)throw new Error(`Story screenplay omitted required source facts: ${missing.map(fact=>fact.id).join(', ')}`);
-    let lastScene=0;
-    for(const fact of activeFacts.filter(fact=>['major_event','turning_point','climax','ending'].includes(fact.category))){
-      const firstScene=firstSceneByFact.get(fact.id)||0;
-      if(firstScene<lastScene)throw new Error(`Story screenplay changed source event order near ${fact.id}`);
-      lastScene=firstScene;
+    if(creativeMode==='my_story'){
+      let lastScene=0;
+      for(const fact of activeFacts.filter(fact=>['major_event','turning_point','climax','ending'].includes(fact.category))){
+        const firstScene=firstSceneByFact.get(fact.id)||0;
+        if(firstScene<lastScene)throw new Error(`Story screenplay changed the customer's source event order near ${fact.id}`);
+        lastScene=firstScene;
+      }
     }
   }else{
     const unclaimed=[...sceneCoverage].filter(id=>!claimed.has(id));
@@ -539,7 +541,7 @@ Return only the strict JSON requested by the schema.`;
       if(adjacentRepeats>1)throw new Error('Story screenplay repeats too many adjacent settings');
       const actionStarts=scenes.map(scene=>scene.visibleAction.toLowerCase().split(/\s+/).slice(0,5).join(' '));
       if(new Set(actionStarts).size<14)throw new Error('Story screenplay repeats too many similar actions');
-      const sourceCoverage=validateSourceCoverage(parsed.sourceCoverage,scenes,expectedFacts,allowedSubjectIds,subjectRoster);
+      const sourceCoverage=validateSourceCoverage(parsed.sourceCoverage,scenes,expectedFacts,allowedSubjectIds,subjectRoster,creativeMode);
       return{version:8,title:String(parsed.title||'Main Character Studios Movie').trim(),creativeMode,draftAttempt,sourceCoverage,scenes};
     }catch(error){
       lastValidationError=error;
