@@ -23,7 +23,7 @@ async function statusPayload(order,key,base){
     fetch(`https://api.runpod.ai/v2/${ENDPOINT}/health`,{headers})
   ]);
   const[job,endpoint,workerPayload,health]=await Promise.all([json(jobResponse),json(endpointResponse),json(workersResponse),json(healthResponse)]);
-  const workers=Array.isArray(workerPayload?.workers)?workerPayload.workers.map(w=>({id:w.id,status:w.status,desiredStatus:w.desiredStatus,gpu:w.gpu,uptimeSeconds:w.uptimeSeconds,version:w.version??w.endpointVersion??w.workerVersion??null,serverlessVersion:w.serverlessVersion??null,createdAt:w.createdAt??null,lastStartedAt:w.lastStartedAt??null})):[];
+  const workers=Array.isArray(workerPayload?.workers)?workerPayload.workers.map(w=>({id:w.id,status:w.status,desiredStatus:w.desiredStatus,gpu:w.gpu,uptimeSeconds:w.uptimeSeconds,version:w.version??w.endpointVersion??w.workerVersion??null,serverlessVersion:w.serverlessVersion??null,createdAt:w.createdAt??null,lastStartedAt:w.lastStartedAt??null,error:w.error??null,lastError:w.lastError??null,errorMessage:w.errorMessage??null,reason:w.reason??null,runtime:w.runtime??null,fields:Object.keys(w)})):[];
   return{mcsJobId:TARGET,mode:order.mode,stripeSessionId:order.stripeSessionId,runpodJobId:order.runpodJobId,runpodHttp:jobResponse.status,runpodStatus:String(job.status||''),delayTime:job.delayTime??null,executionTime:job.executionTime??null,output:job.output||null,error:job.error||null,endpoint:{http:endpointResponse.status,workersMin:endpoint.workersMin,workersMax:endpoint.workersMax,version:endpoint.version},health,workers};
 }
 
