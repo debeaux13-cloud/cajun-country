@@ -4,14 +4,14 @@ import {runpod} from '../_runpod';
 import {ORDER_RECOVERY_STALE_MS,orderRecoveryReason} from '../../../lib/order-recovery-reason';
 
 const ACTIVE=new Set(['IN_QUEUE','IN_PROGRESS']);
-const MAX_RECOVERIES=2;
+const MAX_RECOVERIES=3;
 const PREBUILT_MIGRATION_ORDER='82566803-902c-48c2-a95a-73dd3014356a';
 const COOLDOWN_MS=10*60*1000;
 const ELIGIBLE_AGE_MS=24*60*60*1000;
 const CANARY_SOURCE_JOB='9a9bf989-c81d-4dea-9a38-055e7ec9ed7b-u2';
 const CANARY_PATH='mcs/config/order-recovery-canary.json';
 const PREVIEW_CLAIM_PREFIX='mcs/preview-claims/';
-const PREVIEW_MAX_RECOVERIES=2;
+const PREVIEW_MAX_RECOVERIES=3;
 
 function authorized(req){
   const secret=process.env.CRON_SECRET||'';
@@ -42,6 +42,92 @@ async function saveOrder(order,token){
   }
   if(order.stripeEventId)writes.push(put(`mcs/stripe-events/${order.stripeEventId}.json`,JSON.stringify(order),options));
   await Promise.all(writes);
+}
+
+function stripeKey(){
+  return process.env.Stripe||process.env.STRIPE_SECRET_KEY||'';
+}
+
+async function stripeSession(id,key){
+  const response=await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(id)}`,{
+    headers:{Authorization:`Bearer ${key}`}
+  });
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(`Stripe session lookup failed (${response.status})`);
+  return payload;
+}
+
+async function refundPaidOrder(order){
+  if(order.refundId)return{refundId:order.refundId,refundStatus:order.refundStatus||'succeeded'};
+  const key=stripeKey();
+  if(!key)throw new Error('Stripe secret missing for automatic refund');
+  const session=await stripeSession(order.stripeSessionId,key);
+  const paymentIntentId=String(order.stripePaymentIntentId||session.payment_intent||'');
+  if(!paymentIntentId)throw new Error('Stripe payment intent missing for automatic refund');
+  const body=new URLSearchParams();
+  body.set('payment_intent',paymentIntentId);
+  body.set('metadata[mcsJobId]',String(order.mcsJobId));
+  body.set('metadata[reason]','render_recovery_exhausted');
+  const response=await fetch('https://api.stripe.com/v1/refunds',{
+    method:'POST',
+    headers:{
+      Authorization:`Bearer ${key}`,
+      'Content-Type':'application/x-www-form-urlencoded',
+      'Idempotency-Key':`mcs-recovery-refund-${order.mcsJobId}`
+    },
+    body
+  });
+  const payload=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(`Stripe refund failed (${response.status}): ${String(payload?.error?.message||'unknown error').slice(0,180)}`);
+  return{refundId:String(payload.id||''),refundStatus:String(payload.status||'pending'),stripePaymentIntentId:paymentIntentId};
+}
+
+async function exhaustPaidOrder(order,reason,token){
+  let refund={};
+  let refundError='';
+  try{refund=await refundPaidOrder(order)}
+  catch(error){refundError=String(error?.message||error)}
+  const failed={
+    ...order,
+    ...refund,
+    status:'failed',
+    runpodStatus:'FAILED',
+    customerState:refund.refundId?'refunded':'refund_pending',
+    failureCode:'recovery_exhausted',
+    failureReason:reason||order.lastRecoveryReason||'recovery_limit_reached',
+    failureMessage:'The movie could not be completed after three automatic recovery attempts.',
+    recoveryExhaustedAt:order.recoveryExhaustedAt||new Date().toISOString(),
+    refundError:refundError||''
+  };
+  await saveOrder(failed,token);
+  console.error('Automatic order recovery exhausted',{
+    orderId:order.mcsJobId,
+    attempts:Number(order.recoveryAttempts||0),
+    refundStatus:failed.customerState,
+    refundId:failed.refundId||'',
+    refundError:failed.refundError
+  });
+  return failed;
+}
+
+async function exhaustPreview(pathname,claim,reason,token){
+  const failed={
+    ...claim,
+    status:'failed',
+    runpodStatus:'FAILED',
+    failureCode:'recovery_exhausted',
+    failureReason:reason||claim.lastRecoveryReason||'recovery_limit_reached',
+    failureMessage:'The preview could not be completed after three automatic recovery attempts.',
+    recoveryExhaustedAt:claim.recoveryExhaustedAt||new Date().toISOString(),
+    updatedAt:new Date().toISOString()
+  };
+  await savePreviewClaim(pathname,failed,token);
+  console.error('Automatic preview recovery exhausted',{
+    previewId:claim.mcsJobId,
+    attempts:Number(claim.recoveryAttempts||0),
+    reason:failed.failureReason
+  });
+  return failed;
 }
 
 async function ensurePaidContract(order){
@@ -142,7 +228,8 @@ async function recoverPreviews(headers,base,token){
         continue;
       }
       if(Number(claim.recoveryAttempts||0)>=PREVIEW_MAX_RECOVERIES){
-        results.push({previewId:claim.mcsJobId,action:'max_recoveries'});
+        const failed=await exhaustPreview(blob.pathname,claim,claim.lastRecoveryReason,token);
+        results.push({previewId:claim.mcsJobId,action:'failed',reason:failed.failureReason});
         continue;
       }
       const lastRecovery=new Date(claim.lastRecoveryAt||0).getTime()||0;
@@ -217,7 +304,11 @@ export default async function handler(req,res){
       if(!createdAt||Date.now()-createdAt>ELIGIBLE_AGE_MS){results.push({orderId:order.mcsJobId,action:'outside_recovery_window'});continue}
       const attempts=Number(order.recoveryAttempts||0);
       const recoveryLimit=order.mcsJobId===PREBUILT_MIGRATION_ORDER?MAX_RECOVERIES+2:MAX_RECOVERIES;
-      if(attempts>=recoveryLimit){results.push({orderId:order.mcsJobId,action:'max_recoveries'});continue}
+      if(attempts>=recoveryLimit){
+        const failed=await exhaustPaidOrder(order,order.lastRecoveryReason,token);
+        results.push({orderId:order.mcsJobId,action:failed.refundId?'refunded':'refund_pending',refundId:failed.refundId||''});
+        continue;
+      }
       const lastRecovery=new Date(order.lastRecoveryAt||0).getTime()||0;
       if(Date.now()-lastRecovery<COOLDOWN_MS)continue;
       const response=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{headers});
@@ -235,7 +326,15 @@ export default async function handler(req,res){
         results.push({orderId:order.mcsJobId,action:'requeued',reason,newJobId:recovered.runpodJobId});
         continue;
       }
-      const latest=ACTIVE.has(String(job.status||'').toUpperCase())?await latestProgressAt(order.mcsJobId,token):0;
+      const providerStatus=String(job.status||'').toUpperCase();
+      const businessStatus=String(job?.output?.status||'').toLowerCase();
+      if(providerStatus==='COMPLETED'&&businessStatus==='ready'){
+        const completed={...order,status:'ready',runpodStatus:'COMPLETED',completedAt:order.completedAt||new Date().toISOString()};
+        await saveOrder(completed,token);
+        results.push({orderId:order.mcsJobId,action:'completed'});
+        continue;
+      }
+      const latest=ACTIVE.has(providerStatus)?await latestProgressAt(order.mcsJobId,token):0;
       const reason=orderRecoveryReason(job,latest);
       if(!reason)continue;
       const recovered=await requeue(order,reason,headers,base,token);
