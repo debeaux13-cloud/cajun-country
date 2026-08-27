@@ -77,16 +77,16 @@ export default function MyOrders(){
           <strong style={{display:'block',fontSize:18,marginBottom:10}}>{order.state==='rendering'?'Production is active':'Preparing production'}</strong>
           <progress aria-label='Movie production is active' style={{width:'100%',height:18,accentColor:'#7b2cff'}}/>
           <p style={{margin:'10px 0 4px',lineHeight:1.5}}>Scenes 7–18 are being created, narrated, and assembled automatically.</p>
-          <small style={{color:'#6d6073'}}>This page checks automatically every 12 seconds{lastChecked?` · Last checked ${lastChecked}`:''}.</small>
+          <small style={{color:'#6d6073'}}>This page checks automatically{lastChecked?` · Last checked ${lastChecked}`:''}.</small>
         </div>}
         {order?.progress!=null&&<p><b>Latest update:</b> {String(order.progress)}</p>}
         {order?.completedScenes&&<p><b>Scenes complete:</b> {order.completedScenes} of 18</p>}
-        {error&&<p style={{color:'#8a2d2d'}}>We could not refresh this second. Your order is safe and this page will try again.</p>}
+        {error&&<p style={{color:'#8a2d2d'}}>We could not refresh right now. Your order is safe and this page will try again.</p>}
         {order?.state==='ready'&&<div style={{marginTop:22}}>
           <video src={order.movieUrl} controls playsInline style={{width:'100%',borderRadius:20,background:'#000'}}/>
           <p><a href={order.storybookUrl} target='_blank' rel='noreferrer' style={{fontWeight:900,color:'#6d24c7'}}>Open the matching storybook PDF →</a></p>
         </div>}
-        {order?.state==='needs_attention'&&<p style={{padding:14,borderRadius:14,background:'#fff2d6'}}>No second payment is needed. Main Character Studios has the order and will review the render before delivery.</p>}
+        {order?.state==='needs_attention'&&<p style={{padding:14,borderRadius:14,background:'#fff2d6'}}>No additional payment is needed. Main Character Studios has the order and will review the render before delivery.</p>}
       </section>}
     </div>
   </main>;
