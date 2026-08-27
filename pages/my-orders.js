@@ -65,7 +65,7 @@ export default function MyOrders(){
   return <main style={{minHeight:'100vh',background:'#fff7f1',color:'#24152e',fontFamily:'Arial,sans-serif'}}>
     <div style={{maxWidth:900,margin:'0 auto',padding:24}}>
       <a href='/' style={{color:'#24152e'}}>← Main Character Studios by Tiffani</a>
-      <h1 style={{fontFamily:'Georgia,serif',fontSize:'clamp(42px,7vw,70px)',marginBottom:8}}>My Orders</h1>
+      <h1 style={{fontFamily:'Georgia,serif',fontSize:'clamp(32px,7vw,52px)',marginBottom:8}}>My Orders</h1>
       {!sessionId&&<section style={{marginTop:24,background:'#fff',border:'1px solid #e6d8e8',borderRadius:22,padding:24}}><h2>Your movies live here.</h2><p>Open the confirmation link from your checkout on this device to see the latest order.</p></section>}
       {sessionId&&<section style={{marginTop:24,background:'#fff',border:'1px solid #e6d8e8',borderRadius:22,padding:24}}>
         <div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'center',flexWrap:'wrap'}}>
