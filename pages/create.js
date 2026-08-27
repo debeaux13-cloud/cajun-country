@@ -246,14 +246,14 @@ export default function Create(){
       @media(max-width:640px){
         .createShell{padding:16px!important}
         .createHeader{align-items:flex-start!important}
-        .createTitle{font-size:46px!important;margin-top:24px!important}
-        .createSubtitle{font-size:17px!important;line-height:1.5}
-        .createCard{padding:18px!important;border-radius:22px!important}
+        .createTitle{font-size:34px!important;line-height:1.05!important;margin-top:18px!important}
+        .createSubtitle{font-size:15px!important;line-height:1.45}
+        .createCard{padding:14px!important;border-radius:18px!important}
         .stageIntro{display:block!important}
         .aiBadge{margin-bottom:12px}
         .vibeButtons{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))}
         .vibeButton{width:100%}
-        .primaryButton,.previewButton,.secondaryButton{display:block;width:100%;min-height:52px}
+        .primaryButton,.previewButton,.secondaryButton{display:block;width:100%;min-height:44px;padding:11px 14px!important;font-size:15px!important}
         .photoInput{padding:10px}
       }
     `}</style>
