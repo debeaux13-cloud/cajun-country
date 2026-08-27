@@ -106,8 +106,23 @@ export default async function handler(req,res){
     const response=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{
       headers:{Authorization:`Bearer ${runpodKey}`}
     });
-    const job=await response.json();
-    if(!response.ok)throw new Error('Movie status could not be read');
+    const job=await response.json().catch(()=>({}));
+    if(!response.ok){
+      console.warn('Order render status is temporarily unavailable',{
+        mcsJobId,
+        runpodJobId:String(order.runpodJobId),
+        providerHttp:response.status
+      });
+      return res.status(200).json({
+        ok:true,
+        state:'queued',
+        completedScenes:null,
+        progress:null,
+        message:'Your movie is continuing from the preview you approved.',
+        movieUrl:null,
+        storybookUrl:null
+      });
+    }
 
     const output=job.output||{};
     let state=customerState(String(job.status||''),output);
