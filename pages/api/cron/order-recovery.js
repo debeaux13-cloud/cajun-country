@@ -5,6 +5,7 @@ import {orderRecoveryReason} from '../../../lib/order-recovery-reason';
 
 const ACTIVE=new Set(['IN_QUEUE','IN_PROGRESS']);
 const MAX_RECOVERIES=2;
+const PREBUILT_MIGRATION_ORDER='82566803-902c-48c2-a95a-73dd3014356a';
 const COOLDOWN_MS=10*60*1000;
 const ELIGIBLE_AGE_MS=24*60*60*1000;
 const CANARY_SOURCE_JOB='9a9bf989-c81d-4dea-9a38-055e7ec9ed7b-u2';
@@ -99,7 +100,8 @@ export default async function handler(req,res){
       const createdAt=new Date(order.createdAt||0).getTime()||0;
       if(!createdAt||Date.now()-createdAt>ELIGIBLE_AGE_MS){results.push({orderId:order.mcsJobId,action:'outside_recovery_window'});continue}
       const attempts=Number(order.recoveryAttempts||0);
-      if(attempts>=MAX_RECOVERIES){results.push({orderId:order.mcsJobId,action:'max_recoveries'});continue}
+      const recoveryLimit=order.mcsJobId===PREBUILT_MIGRATION_ORDER?MAX_RECOVERIES+1:MAX_RECOVERIES;
+      if(attempts>=recoveryLimit){results.push({orderId:order.mcsJobId,action:'max_recoveries'});continue}
       const lastRecovery=new Date(order.lastRecoveryAt||0).getTime()||0;
       if(Date.now()-lastRecovery<COOLDOWN_MS)continue;
       const response=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{headers});
