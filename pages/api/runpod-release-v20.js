@@ -5,7 +5,7 @@ const TEMPLATE_ID='2w5x8empgg';
 const ENDPOINT_ID='id81aby9nfth9h';
 const SOURCE_COMMIT='d9297e151f0bbb9da0fc44dfaa005c6cfc656707';
 const SOURCE_BLOB='dea55f9f3a2ac67b375415a6b00ef365ad585b82';
-const BUNDLE_SHA='3f505a07639d74bcfd4ccc460d56889763c06554b85751edf027337ca759c4f2';
+const BUNDLE_SHA='6c70294d070fc68b4ad0c0bb28361e1eca1d16b3e7067af2aac0ecb794380e27';
 function auth(req){const got=crypto.createHash('sha256').update(String(req.headers['x-mcs-release-token']||'')).digest('hex');return got===TOKEN_HASH}
 async function json(r){return r.json().catch(()=>({}))}
 function templateBody(t,command){const b={containerDiskInGb:t.containerDiskInGb,containerRegistryAuthId:t.containerRegistryAuthId||undefined,dockerEntrypoint:['/bin/bash','-lc'],dockerStartCmd:[command],env:t.env||{},imageName:t.imageName,isPublic:Boolean(t.isPublic),name:t.name,ports:t.ports||[],readme:t.readme||'',volumeInGb:t.volumeInGb||0,volumeMountPath:t.volumeMountPath||'/workspace'};for(const k of Object.keys(b))if(b[k]===undefined)delete b[k];return b}
