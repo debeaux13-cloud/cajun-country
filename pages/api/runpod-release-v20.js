@@ -38,6 +38,10 @@ export default async function handler(req,res){
    const id=String(req.body?.jobId||'');if(!id)return res.status(400).json({error:'jobId required'});
    const r=await fetch(`https://api.runpod.ai/v2/${ENDPOINT_ID}/status/${id}`,{headers});const p=await json(r);return res.status(r.ok?200:r.status).json({ok:r.ok,payload:p});
   }
+  if(action==='cancel_probe'){
+   const id=String(req.body?.jobId||'');const allowed=new Set(['d05b7a76-e472-4c4e-b7e1-f89025a58f59-u1','3f624c01-f2bc-4f6a-a6b1-3b778be07af6-u2']);if(!allowed.has(id))return res.status(403).json({error:'Only release probes can be cancelled'});
+   const r=await fetch(`https://api.runpod.ai/v2/${ENDPOINT_ID}/cancel/${id}`,{method:'POST',headers});const p=await json(r);return res.status(r.ok?200:r.status).json({ok:r.ok,payload:p});
+  }
   if(action==='health'||action==='purge'){
    const r=await fetch(`https://api.runpod.ai/v2/${ENDPOINT_ID}/${action==='purge'?'purge-queue':'health'}`,{method:action==='purge'?'POST':'GET',headers});const p=await json(r);return res.status(r.ok?200:r.status).json({ok:r.ok,payload:p});
   }
