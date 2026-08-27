@@ -108,6 +108,12 @@ export default async function handler(req,res){
         const reason=orderRecoveryReason(null,0,Date.now(),response.status);
         if(!reason){results.push({orderId:order.mcsJobId,action:'provider_unavailable',providerHttp:response.status});continue}
         const recovered=await requeue(order,reason,headers,base,token);
+        console.info('Automatic order recovery requeued',{
+          orderId:order.mcsJobId,
+          reason,
+          priorRunpodJobId:order.runpodJobId,
+          newRunpodJobId:recovered.runpodJobId
+        });
         results.push({orderId:order.mcsJobId,action:'requeued',reason,newJobId:recovered.runpodJobId});
         continue;
       }
@@ -115,6 +121,12 @@ export default async function handler(req,res){
       const reason=orderRecoveryReason(job,latest);
       if(!reason)continue;
       const recovered=await requeue(order,reason,headers,base,token);
+      console.info('Automatic order recovery requeued',{
+        orderId:order.mcsJobId,
+        reason,
+        priorRunpodJobId:order.runpodJobId,
+        newRunpodJobId:recovered.runpodJobId
+      });
       results.push({orderId:order.mcsJobId,action:'requeued',reason,newJobId:recovered.runpodJobId});
     }catch(error){
       console.error('Automatic order recovery failed',{pathname:blob.pathname,error:String(error?.message||error)});
