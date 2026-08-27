@@ -151,6 +151,7 @@ export default async function handler(req,res){
     const record={
       stripeEventId:String(event.id),
       stripeSessionId,
+      stripePaymentIntentId:String(session.payment_intent||''),
       mcsJobId,
       runpodJobId:String(result.id||''),
       runpodStatus:String(result.status||'IN_QUEUE'),
