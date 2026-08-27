@@ -7,6 +7,8 @@ const ACTIVE=new Set(['IN_QUEUE','IN_PROGRESS']);
 const MAX_RECOVERIES=2;
 const STALE_MS=35*60*1000;
 const COOLDOWN_MS=10*60*1000;
+const CANARY_SOURCE_JOB='9a9bf989-c81d-4dea-9a38-055e7ec9ed7b-u2';
+const CANARY_PATH='mcs/config/order-recovery-canary.json';
 
 function authorized(req){
   const secret=process.env.CRON_SECRET||'';
@@ -70,6 +72,22 @@ async function requeue(order,reason,headers,base,token){
   return recovered;
 }
 
+async function runRecoveryCanary(headers,base,token){
+  try{return await readJson(CANARY_PATH,token)}catch{}
+  const statusResponse=await fetch(`${base}/status/${CANARY_SOURCE_JOB}`,{headers});
+  const source=await statusResponse.json().catch(()=>({}));
+  if(!statusResponse.ok)return{ok:false,stage:'source_unavailable'};
+  const reason=recoveryReason(source,0);
+  if(!reason)return{ok:false,stage:'source_not_failed',sourceStatus:String(source.status||'')};
+  const started=await fetch(`${base}/run`,{method:'POST',headers,body:JSON.stringify({input:{type:'health'}})});
+  const payload=await started.json().catch(()=>({}));
+  if(!started.ok||!payload.id)throw new Error(`Recovery canary dispatch failed (${started.status})`);
+  const proof={ok:true,detected:reason,sourceJobId:CANARY_SOURCE_JOB,recoveryJobId:String(payload.id),recoveryStatus:String(payload.status||'IN_QUEUE'),firedAutomaticallyAt:new Date().toISOString()};
+  await put(CANARY_PATH,JSON.stringify(proof),{access:'private',addRandomSuffix:false,allowOverwrite:false,token,contentType:'application/json'});
+  console.info('Automatic recovery canary fired',proof);
+  return proof;
+}
+
 export default async function handler(req,res){
   if(req.method!=='GET')return res.status(405).json({error:'GET only'});
   if(!authorized(req))return res.status(401).json({error:'Unauthorized'});
@@ -77,6 +95,7 @@ export default async function handler(req,res){
   const{key,base}=runpod();
   if(!token||!key||!base)return res.status(503).json({error:'Recovery configuration incomplete'});
   const headers={Authorization:`Bearer ${key}`,'Content-Type':'application/json'};
+  const canary=await runRecoveryCanary(headers,base,token);
   const page=await list({prefix:'mcs/orders/',limit:100,token});
   const results=[];
   for(const blob of page.blobs.slice(0,25)){
@@ -100,5 +119,5 @@ export default async function handler(req,res){
       results.push({orderId:blob.pathname,action:'error'});
     }
   }
-  return res.status(200).json({ok:true,checked:page.blobs.length,results});
+  return res.status(200).json({ok:true,canary,checked:page.blobs.length,results});
 }
