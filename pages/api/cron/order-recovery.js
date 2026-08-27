@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import {head,list,put} from '@vercel/blob';
 import {runpod} from '../_runpod';
-import {orderRecoveryReason} from '../../../lib/order-recovery-reason';
+import {ORDER_RECOVERY_STALE_MS,orderRecoveryReason} from '../../../lib/order-recovery-reason';
 
 const ACTIVE=new Set(['IN_QUEUE','IN_PROGRESS']);
 const MAX_RECOVERIES=2;
@@ -10,6 +10,8 @@ const COOLDOWN_MS=10*60*1000;
 const ELIGIBLE_AGE_MS=24*60*60*1000;
 const CANARY_SOURCE_JOB='9a9bf989-c81d-4dea-9a38-055e7ec9ed7b-u2';
 const CANARY_PATH='mcs/config/order-recovery-canary.json';
+const PREVIEW_CLAIM_PREFIX='mcs/preview-claims/';
+const PREVIEW_MAX_RECOVERIES=2;
 
 function authorized(req){
   const secret=process.env.CRON_SECRET||'';
@@ -75,6 +77,107 @@ async function requeue(order,reason,headers,base,token){
   const recovered={...order,priorRunpodJobId:oldJobId,runpodJobId:String(payload.id),runpodStatus:String(payload.status||'IN_QUEUE'),recoveryAttempts:Number(order.recoveryAttempts||0)+1,lastRecoveryAt:new Date().toISOString(),lastRecoveryReason:reason};
   await saveOrder(recovered,token);
   return recovered;
+}
+
+
+async function savePreviewClaim(pathname,claim,token){
+  await put(pathname,JSON.stringify(claim),{
+    access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'
+  });
+}
+
+async function previewMovieReady(mcsJobId,token){
+  try{
+    const movie=await head(`mcs/jobs/${mcsJobId}/preview-movie.bin`,{token});
+    return movie.contentType==='video/mp4'&&Number(movie.size)>=500*1024;
+  }catch{return false}
+}
+
+async function requeuePreview(pathname,claim,reason,headers,base,token){
+  const oldJobId=String(claim.jobId||'');
+  if(reason.startsWith('stuck_')&&oldJobId){
+    const cancelled=await fetch(`${base}/cancel/${encodeURIComponent(oldJobId)}`,{method:'POST',headers});
+    if(!cancelled.ok)throw new Error(`Stuck preview cancel failed (${cancelled.status})`);
+  }
+  const started=await fetch(base+'/run',{
+    method:'POST',headers,
+    body:JSON.stringify({input:{
+      jobId:claim.mcsJobId,
+      callbackBase:'https://main-character-studios.vercel.app',
+      mode:'preview',
+      workerSecret:process.env.MCS_WORKER_SECRET||'',
+      duration_seconds:60,preview_scene_count:6,total_scene_count:18,full_duration_seconds:180
+    }})
+  });
+  const payload=await started.json().catch(()=>({}));
+  if(!started.ok||!payload.id)throw new Error(`Preview recovery dispatch failed (${started.status})`);
+  const recovered={
+    ...claim,priorJobId:oldJobId,jobId:String(payload.id),
+    runpodStatus:String(payload.status||'IN_QUEUE'),status:'submitted',
+    recoveryAttempts:Number(claim.recoveryAttempts||0)+1,
+    lastRecoveryAt:new Date().toISOString(),lastRecoveryReason:reason,
+    updatedAt:new Date().toISOString()
+  };
+  await savePreviewClaim(pathname,recovered,token);
+  return recovered;
+}
+
+async function recoverPreviews(headers,base,token){
+  const page=await list({prefix:PREVIEW_CLAIM_PREFIX,limit:100,token});
+  const results=[];
+  const recent=[...page.blobs]
+    .sort((left,right)=>new Date(right.uploadedAt||0).getTime()-new Date(left.uploadedAt||0).getTime())
+    .slice(0,25);
+  for(const blob of recent){
+    try{
+      const claim=await readJson(blob.pathname,token);
+      if(!claim?.mcsJobId||!['submitted','submitting','submission_unknown'].includes(String(claim.status||'')))continue;
+      if(await previewMovieReady(claim.mcsJobId,token)){
+        results.push({previewId:claim.mcsJobId,action:'ready'});
+        continue;
+      }
+      const createdAt=new Date(claim.createdAt||0).getTime()||0;
+      if(!createdAt||Date.now()-createdAt>ELIGIBLE_AGE_MS){
+        results.push({previewId:claim.mcsJobId,action:'outside_recovery_window'});
+        continue;
+      }
+      if(Number(claim.recoveryAttempts||0)>=PREVIEW_MAX_RECOVERIES){
+        results.push({previewId:claim.mcsJobId,action:'max_recoveries'});
+        continue;
+      }
+      const lastRecovery=new Date(claim.lastRecoveryAt||0).getTime()||0;
+      if(Date.now()-lastRecovery<COOLDOWN_MS)continue;
+      const latest=await latestProgressAt(claim.mcsJobId,token);
+      let reason='';
+      if(claim.status==='submitted'&&claim.jobId){
+        const response=await fetch(`${base}/status/${encodeURIComponent(claim.jobId)}`,{headers});
+        const job=await response.json().catch(()=>({}));
+        if(!response.ok){
+          reason=orderRecoveryReason(null,0,Date.now(),response.status);
+          if(!reason){
+            results.push({previewId:claim.mcsJobId,action:'provider_unavailable',providerHttp:response.status});
+            continue;
+          }
+        }else{
+          reason=orderRecoveryReason(job,ACTIVE.has(String(job.status||'').toUpperCase())?latest:0);
+        }
+      }else{
+        const updatedAt=new Date(claim.updatedAt||claim.createdAt||0).getTime()||0;
+        const mostRecent=Math.max(updatedAt,latest);
+        if(Date.now()-mostRecent>ORDER_RECOVERY_STALE_MS)reason=`stale_${String(claim.status)}`;
+      }
+      if(!reason)continue;
+      const recovered=await requeuePreview(blob.pathname,claim,reason,headers,base,token);
+      console.info('Automatic preview recovery requeued',{
+        previewId:claim.mcsJobId,reason,priorRunpodJobId:claim.jobId||'',newRunpodJobId:recovered.jobId
+      });
+      results.push({previewId:claim.mcsJobId,action:'requeued',reason,newJobId:recovered.jobId});
+    }catch(error){
+      console.error('Automatic preview recovery failed',{pathname:blob.pathname,error:String(error?.message||error)});
+      results.push({previewId:blob.pathname,action:'error'});
+    }
+  }
+  return{checked:page.blobs.length,results};
 }
 
 async function runRecoveryCanary(headers,base,token){
@@ -148,5 +251,6 @@ export default async function handler(req,res){
       results.push({orderId:blob.pathname,action:'error'});
     }
   }
-  return res.status(200).json({ok:true,canary,checked:page.blobs.length,results});
+  const previews=await recoverPreviews(headers,base,token);
+  return res.status(200).json({ok:true,canary,checked:page.blobs.length,results,previews});
 }
