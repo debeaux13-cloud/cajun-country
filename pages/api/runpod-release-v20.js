@@ -34,6 +34,10 @@ export default async function handler(req,res){
   if(action==='probe'){
    const r=await fetch(`https://api.runpod.ai/v2/${ENDPOINT_ID}/run`,{method:'POST',headers,body:JSON.stringify({input:{action:'version'}})});const p=await json(r);return res.status(r.ok?200:r.status).json({ok:r.ok,probeJobId:p.id||'',status:p.status||''});
   }
+  if(action==='probe_status'){
+   const id=String(req.body?.jobId||'');if(!id)return res.status(400).json({error:'jobId required'});
+   const r=await fetch(`https://api.runpod.ai/v2/${ENDPOINT_ID}/status/${id}`,{headers});const p=await json(r);return res.status(r.ok?200:r.status).json({ok:r.ok,payload:p});
+  }
   return res.status(400).json({error:'Unsupported action'});
  }catch(error){return res.status(502).json({error:String(error?.message||error).slice(0,400)})}
 }
