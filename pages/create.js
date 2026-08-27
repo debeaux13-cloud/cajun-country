@@ -46,6 +46,10 @@ async function preparePhoto(file){
 
 export default function Create(){
   const[idea,setIdea]=useState('');
+  const[chatInput,setChatInput]=useState('');
+  const[chatMessages,setChatMessages]=useState([]);
+  const[chatBusy,setChatBusy]=useState(false);
+  const[needsClarification,setNeedsClarification]=useState(false);
   const[drafts,setDrafts]=useState([]);
   const[selectedDraftIndex,setSelectedDraftIndex]=useState(-1);
   const[draftsUsed,setDraftsUsed]=useState(0);
@@ -62,24 +66,45 @@ export default function Create(){
 
   function clearDraftContext(){setDrafts([]);setSelectedDraftIndex(-1)}
   const chooseVibe=next=>{if(next!==vibe){setVibe(next);if(drafts.length)setStatus('Vibe updated for your next draft. Your saved drafts are unchanged.')}};
-  const changeIdea=value=>{setIdea(value);if(drafts.length)setStatus('Optional story text updated for your next draft. Your saved drafts are unchanged.')};
+  const changeIdea=value=>{setIdea(value);if(drafts.length)setStatus('Story direction updated for your next draft. Your saved draft is unchanged.')};
   const changeSelectedPlan=value=>setDrafts(current=>current.map((draft,index)=>index===selectedDraftIndex?{...draft,plan:value,storyBrief:value,originalIdea:value,creativeMode:'my_story'}:draft));
+
+  async function talkToStage(message=chatInput,imageOverride=image,historyOverride=chatMessages){
+    const text=String(message||'').trim();
+    if(!imageOverride){setStatus('Upload the starring photo before chatting with Stage.');return}
+    if(chatBusy)return;
+    const history=Array.isArray(historyOverride)?historyOverride:[];
+    if(text)setChatMessages(current=>[...current,{role:'user',content:text}]);
+    setChatInput('');setChatBusy(true);
+    try{
+      const response=await fetch('/api/story-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,image:imageOverride,vibe,history})});
+      const result=await response.json();
+      if(!response.ok)throw new Error(result.error||'Stage chat failed');
+      setChatMessages(current=>[...current,{role:'assistant',content:result.reply}]);
+      setNeedsClarification(Boolean(result.clarificationNeeded));
+      if(text)changeIdea([idea,text].filter(Boolean).join('\n'));
+      setStatus(result.clarificationNeeded?'Answer Stage’s one question, then create your story.':'Stage understands the photo and is ready to create your story.');
+    }catch(error){setNeedsClarification(false);setStatus(error.message)}finally{setChatBusy(false)}
+  }
 
   async function stage(){
     if(stageRequest.current)return;
     if(!image){setStatus('Add the individual or group photo first so Stage can build the story around everyone in it.');return}
-    if(!idea.trim()&&!vibe){setStatus('Choose a story type or tell the AI your own idea before continuing.');return}
+    const completeIdea=[idea,chatInput].map(value=>String(value||'').trim()).filter(Boolean).join('\n');
+    if(!completeIdea&&!vibe){setStatus('Choose a story type or tell the AI your own idea before continuing.');return}
+    if(needsClarification){setStatus('Answer Stage’s question in the AI chat before creating the story.');return}
     if(checkingPhoto){setStatus('Give us a moment to finish checking that photo.');return}
     if(photoCheck?.status==='retry_required'){setStatus('Choose another photo before creating the story. The current photo does not show enough reliable identity detail.');return}
     const draftAttempt=Math.min(3,draftsUsed+1);
     const priorStoryBriefs=drafts.map(draft=>draft.storyBrief).filter(Boolean);
     const priorSourceLedgers=drafts.map(draft=>draft.sourceLedger).filter(Boolean);
-    const requestMode=idea.trim()?'my_story':'make_for_me';
+    const requestMode=completeIdea?'my_story':'make_for_me';
     stageRequest.current=true;
     setBusy(true);
     setStatus(requestMode==='make_for_me'?'Inventing one complete story around everyone in your photo…':'Turning your idea into one complete story…');
     try{
-      const requestIdea=idea;
+      const requestIdea=completeIdea;
+      if(chatInput.trim()){setIdea(completeIdea);setChatInput('')}
       const requestMoods=[vibe||'surprise me'];
       const response=await fetch('/api/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({creativeMode:requestMode,idea:requestIdea,moods:requestMoods,image:image||undefined,draftAttempt,priorStoryBriefs,priorSourceLedgers})});
       const result=await response.json();
@@ -101,6 +126,7 @@ export default function Create(){
     setDraftsUsed(0);
     setImage('');
     setPhotoCheck(null);
+    setChatMessages([]);setChatInput('');setNeedsClarification(false);
     setCheckingPhoto(true);
     setStatus('Preparing a clear, upload-safe copy of your photo…');
     try{
@@ -113,10 +139,12 @@ export default function Create(){
         if(!response.ok&&result?.status!=='retry_required')throw new Error(result?.error||'Photo check failed');
         const resolved=['good','caution','retry_required'].includes(result?.status)?result:{status:'caution',reason:'The automatic photo check was inconclusive.',tip:'You can continue, or choose a clearer photo for the strongest likeness.',visiblePrincipalSubjectCount:0};
         setPhotoCheck(resolved);
-        setStatus(resolved.status==='retry_required'?'Please choose another photo before creating the story.':'Photo ready. Every visible person and animal will be identified separately.');
+        setStatus(resolved.status==='retry_required'?'Please choose another photo before creating the story.':'Photo ready. Stage is looking at everyone in it now…');
+        if(resolved.status!=='retry_required')void talkToStage('',readyImage,[]);
       }catch{
         setPhotoCheck({status:'caution',reason:'The automatic photo check is temporarily unavailable, so we did not reject your picture.',tip:'You can still create and compare text stories. Upload the photo again before starting the protected moving preview.',visiblePrincipalSubjectCount:0,previewEntitlement:''});
-        setStatus('Photo ready for text stories. Upload it again before starting the moving preview.');
+        setStatus('Photo ready for text stories. Stage is looking at everyone in it now…');
+        void talkToStage('',readyImage,[]);
       }
     }catch(error){event.target.value='';setStatus(error.message)}finally{setCheckingPhoto(false)}
   }
@@ -179,9 +207,17 @@ export default function Create(){
         <fieldset className='vibePicker' disabled={busy} style={{border:0,padding:0,margin:'18px 0'}}><legend style={{fontWeight:800,marginBottom:8}}>Do you want me to tell you a…</legend><div className='vibeButtons' style={{display:'flex',gap:8,flexWrap:'wrap'}}>{VIBES.map(option=><button className='vibeButton' type='button' key={option.value} aria-pressed={vibe===option.value} onClick={()=>chooseVibe(option.value)} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,background:vibe===option.value?'#7b2cff':'#2b2135',color:'#fff',border:vibe===option.value?'2px solid #b994ff':'1px solid #5c4470'}}>{option.label}</button>)}</div></fieldset>
 
         {!selectedDraft&&<>
-          <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>OR TELL ME YOUR OWN IDEA — I’LL MAKE IT COME ALIVE</label>
-          <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} placeholder='TYPE HERE — for example: “Make a rodeo adventure starring everyone in my photo.”' style={{width:'100%',minHeight:120,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
-          <button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'||(!idea.trim()&&!vibe)} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>
+          <section className='storyChatPanel' aria-label='AI Story Chat'>
+            <div className='chatTitle'>STAGE · AI STORY CHAT</div>
+            <div className='chatMessages' aria-live='polite'>
+              {chatMessages.length?chatMessages.map((item,index)=><div key={index} className={item.role==='assistant'?'chatBubble assistantBubble':'chatBubble userBubble'}>{item.content}</div>):<div className='chatBubble assistantBubble'>Upload the starring photo. I’ll tell you who I see and ask one useful question only if I need it.</div>}
+              {chatBusy&&<div className='chatBubble assistantBubble'>Stage is looking and thinking…</div>}
+            </div>
+            <label htmlFor='story-input' className='typeHereLabel'>TYPE YOUR MESSAGE HERE</label>
+            <textarea className='storyInput chatInput' id='story-input' disabled={busy||chatBusy} value={chatInput} onChange={event=>setChatInput(event.target.value)} placeholder='Tell Stage who everyone is, answer its question, or type your own story idea.'/>
+            <button className='sendChatButton' type='button' disabled={busy||chatBusy||!chatInput.trim()||!image} onClick={()=>talkToStage()}>Send to Stage</button>
+          </section>
+          <button className='primaryButton' disabled={busy||chatBusy||checkingPhoto||needsClarification||photoCheck?.status==='retry_required'||(!idea.trim()&&!chatInput.trim()&&!vibe)} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>
         </>}
         <p className='statusLine' style={{minHeight:24}}>{status}</p>
         {selectedDraft&&<>
@@ -220,7 +256,7 @@ export default function Create(){
       .vibeButtons{gap:10px!important}
       .vibeButton{color:#24152e!important;background:#f7eef8!important;border:1px solid #d8c1e2!important;min-height:44px}
       .vibeButton[aria-pressed="true"]{color:#fff!important;background:linear-gradient(135deg,#ef5e72,#8c2bb6)!important;border-color:transparent!important;box-shadow:0 8px 20px rgba(122,42,184,.2)}
-      .storyInput{width:100%!important;border:3px solid #24152e!important;background:#09070b!important;color:#fff!important;box-shadow:0 10px 28px rgba(36,21,46,.22);line-height:1.55;resize:vertical}
+      .storyChatPanel{margin-top:18px;padding:16px;border-radius:20px;background:#09070b;color:#fff;border:3px solid #24152e;box-shadow:0 14px 36px rgba(36,21,46,.25)}.chatTitle{font-size:20px;font-weight:900;letter-spacing:.5px;color:#ff7ead;margin-bottom:12px}.chatMessages{display:grid;gap:9px;max-height:300px;overflow:auto;margin-bottom:14px}.chatBubble{padding:11px 13px;border-radius:15px;line-height:1.45}.assistantBubble{background:#24182f;border:1px solid #5c4470}.userBubble{background:linear-gradient(135deg,#7a2ab8,#ef4b8c);margin-left:12%}.typeHereLabel{display:block;font-weight:900;color:#fff;margin:4px 0 8px}.storyInput{width:100%!important;border:2px solid #ff7ead!important;background:#000!important;color:#fff!important;box-shadow:0 0 0 3px rgba(255,126,173,.12);line-height:1.55;resize:vertical}.chatInput{min-height:100px;padding:14px;border-radius:14px;font-size:16px}.sendChatButton{margin-top:10px;border:0;border-radius:999px;padding:11px 17px;background:#fff;color:#24152e;font-weight:900;cursor:pointer}
       .storyInput::placeholder{color:#d8cfe0;font-weight:800}
       .primaryButton,.previewButton{border:0!important;color:#fff!important;background:linear-gradient(135deg,#ef5e72,#ef4b8c 45%,#8c2bb6)!important;box-shadow:0 12px 28px rgba(178,52,137,.22);cursor:pointer;font-size:16px}
       .secondaryButton,.draftButton{color:#5b267d!important;background:#f5eaf8!important;border:1px solid #d8c1e2!important;cursor:pointer}
@@ -250,7 +286,7 @@ export default function Create(){
         .aiBadge{margin-bottom:12px}
         .vibeButtons{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))}
         .vibeButton{width:100%}
-        .primaryButton,.previewButton,.secondaryButton{display:block;width:100%;min-height:44px;padding:11px 14px!important;font-size:15px!important}
+        .primaryButton,.previewButton,.secondaryButton,.sendChatButton{display:block;width:100%;min-height:44px;padding:11px 14px!important;font-size:15px!important}
         .photoInput{padding:10px}
       }
     `}</style>
