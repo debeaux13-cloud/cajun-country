@@ -5,10 +5,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import requests, runpod
 from audio_polish import add_background_music, create_background_music, normalize_music_vibe
-from pipeline_steps import build_movie, build_pdf, illustrate, locked_motion_scene_prompt, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
+from pipeline_steps import build_movie, build_pdf, create_character_master, illustrate, locked_motion_scene_prompt, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
 from runway_adapter import RunwayGen4Turbo
 
-BUNDLE_VERSION="2026-08-27-mcs-v19-controlled-preview-recovery"
+BUNDLE_VERSION="2026-08-27-mcs-v20-canonical-character-master"
 
 def req(name):
     v=os.environ.get(name,"").strip()
@@ -165,10 +165,24 @@ def handler(event):
                 upload("identity-probe",image,content_type="image/png")
                 update("identity_probe",n,"ready",provider="runway-gen4-image-turbo",providerJobId=image_task["id"])
                 return {"jobId":job_id,"status":"ready","mode":mode,"completed":1,"identityProbe":True}
+            master=root/"character-master.png"
+            master_reused=(not preview and download_if_present("character-master",str(master)))
+            if not master_reused:
+                master_task={"id":""}
+                update("character_master")
+                create_character_master(
+                    str(reference),str(scenes[0].get("identityLock") or ""),str(master),
+                    on_task_created=lambda task_id,**retry:(
+                        master_task.update(id=str(task_id)),
+                        checkpoint_provider("character_master",0,"runway-gen4-image-turbo",task_id,**retry)
+                    )[-1]
+                )
+                upload("character-master",str(master),content_type="image/png")
+                update("character_master",status="ready",provider="runway-gen4-image-turbo",providerJobId=master_task["id"])
             if preview:
                 rendered=[None]*6
                 with ThreadPoolExecutor(max_workers=5) as ex:
-                    fut={ex.submit(render_scene,root,reference,s,i):i-1 for i,s in enumerate(scenes,start=1)}
+                    fut={ex.submit(render_scene,root,master,s,i):i-1 for i,s in enumerate(scenes,start=1)}
                     for f in as_completed(fut):rendered[fut[f]]=f.result()
                 images=[x[0] for x in rendered]; narr=[x[1] for x in rendered]; sounds=[x[2] for x in rendered]; vids=[x[3] for x in rendered]; validate_unique_scene_images(images)
                 update("assembling"); movie=str(root/"preview.mp4"); music=str(root/"preview-music-bed.mp3"); build_movie(vids,narr,folder,movie,60,sound_effect_paths=sounds); create_background_music(music,selected_vibe,30); upload("music-bed",music,content_type="audio/mpeg"); add_background_music(movie,folder,60,music_path=music,vibe=selected_vibe); verify_movie(movie,60); upload("preview-movie",movie,content_type="video/mp4"); update("ready",status="ready",manifest=manifest,musicVibe=selected_vibe,musicAsset="music-bed")
@@ -181,7 +195,7 @@ def handler(event):
                     path=str(root/f"{kind}-{n}.{ext}"); download(kind,path,n); vals.append(path)
                 rendered[i-1]=tuple(vals)
             with ThreadPoolExecutor(max_workers=6) as ex:
-                fut={ex.submit(render_scene,root,reference,s,i):i-1 for i,s in enumerate(scenes[6:],start=7)}
+                fut={ex.submit(render_scene,root,master,s,i):i-1 for i,s in enumerate(scenes[6:],start=7)}
                 for f in as_completed(fut):rendered[fut[f]]=f.result()
             images=[x[0] for x in rendered]; narr=[x[1] for x in rendered]; sounds=[x[2] for x in rendered]; vids=[x[3] for x in rendered]; validate_unique_scene_images(images)
             update("assembling"); movie=str(root/"story-video.mp4"); music=str(root/"preview-music-bed.mp3"); build_movie(vids,narr,folder,movie,180,sound_effect_paths=sounds); music_continuity=download_if_present("music-bed",music)
