@@ -16,6 +16,12 @@ async function readJson(pathname,token){
   if(!response.ok)throw new Error('Private record read failed');
   return response.json();
 }
+async function readBuffer(pathname,token){
+  const meta=await head(pathname,{token});
+  const response=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});
+  if(!response.ok)throw new Error('Private asset read failed');
+  return{bytes:Buffer.from(await response.arrayBuffer()),contentType:response.headers.get('content-type')||'image/png'};
+}
 async function json(r){return r.json().catch(()=>({}))}
 function templateBody(t,command){const b={containerDiskInGb:t.containerDiskInGb,containerRegistryAuthId:t.containerRegistryAuthId||undefined,dockerEntrypoint:['/bin/bash','-lc'],dockerStartCmd:[command],env:t.env||{},imageName:t.imageName,isPublic:Boolean(t.isPublic),name:t.name,ports:t.ports||[],readme:t.readme||'',volumeInGb:t.volumeInGb||0,volumeMountPath:t.volumeMountPath||'/workspace'};for(const k of Object.keys(b))if(b[k]===undefined)delete b[k];return b}
 
@@ -78,6 +84,36 @@ export default async function handler(req,res){
       const up=await fetch(`https://rest.runpod.io/v1/endpoints/${ENDPOINT}`,{method:'PATCH',headers,body:JSON.stringify({workersMin:0,workersMax:4})});
       const payload=await json(up);
       return res.status(up.ok?200:502).json({ok:up.ok,phase:'v20_active',endpointVersion:payload.version??null,payload});
+    }
+    if(action==='retry_safety_input'){
+      if(order.mode!=='test'||order.runpodJobId!=='94c140d9-8c1a-466d-b123-965802636aee-u1')return res.status(409).json({error:'Exact safety-blocked paid receipt no longer current'});
+      const before=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{headers:{Authorization:`Bearer ${key}`}});
+      const beforeJob=await json(before);
+      const detail=String(beforeJob.error||'');
+      if(beforeJob.status!=='FAILED'||!detail.includes('SAFETY.INPUT.MULTIMODAL'))return res.status(409).json({error:'Paid test is not at the exact Runway input-safety failure',status:beforeJob.status||'',detail});
+      const match=detail.match(/Runway task ([0-9a-f-]{36})/i);
+      if(!match)return res.status(409).json({error:'Failed provider task id missing'});
+      const failedTask=match[1];
+      let failedScene=0;
+      for(let scene=7;scene<=18;scene++){
+        try{const record=await readJson(`mcs/jobs/${TARGET}/provider-tasks/animation-scene-${scene}.json`,token);if(String(record.providerJobId||'')===failedTask){failedScene=scene;break}}catch{}
+      }
+      if(!failedScene)return res.status(409).json({error:'Failed provider task is not mapped to a paid scene',failedTask});
+      const source=await readBuffer(`mcs/jobs/${TARGET}/scene-image-${failedScene}.bin`,token);
+      const runwayKey=process.env.Runway||process.env.RUNWAY_API_KEY||'';
+      if(!runwayKey)return res.status(503).json({error:'Runway key missing'});
+      const runwayResponse=await fetch('https://api.dev.runwayml.com/v1/image_to_video',{method:'POST',headers:{Authorization:`Bearer ${runwayKey}`,'Content-Type':'application/json','X-Runway-Version':'2024-11-06'},body:JSON.stringify({model:'gen4_turbo',promptImage:`data:${source.contentType};base64,${source.bytes.toString('base64')}`,promptText:'Wholesome family-friendly warm stylized 3D CGI movie. The principal characters perform a simple friendly full-body action with natural movement, blinking, breathing, and comfortable personal space. Preserve exact identity, anatomy, clothing, colors, markings, setting, and props. No text, danger, injury, intimacy, or frightening imagery.',ratio:'1280:720',duration:10})});
+      const runwayPayload=await json(runwayResponse);
+      if(!runwayResponse.ok||!runwayPayload.id)return res.status(502).json({error:'Safety-neutral scene retry was not accepted',http:runwayResponse.status,payload:runwayPayload});
+      const options={access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'};
+      await put(`mcs/jobs/${TARGET}/provider-tasks/animation-scene-${failedScene}.json`,JSON.stringify({version:1,sceneNumber:failedScene,phase:'animation',provider:'runway-gen4-turbo',providerJobId:String(runwayPayload.id),status:'provider_started',retryAttempt:1,priorProviderJobId:failedTask,updatedAt:new Date().toISOString()}),options);
+      const started=await fetch(base+'/run',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({input:{jobId:TARGET,callbackBase:'https://main-character-studios.vercel.app',mode:'paid',duration_seconds:180,preview_scene_count:6,total_scene_count:18,full_duration_seconds:180,stripeSessionId:order.stripeSessionId}})});
+      const startedPayload=await json(started);
+      if(!started.ok||!startedPayload.id)return res.status(502).json({error:'Paid continuation after safety-neutral scene was not accepted',payload:startedPayload,scene:failedScene,runwayTaskId:runwayPayload.id});
+      order={...order,priorRunpodJobId:order.runpodJobId,runpodJobId:String(startedPayload.id),runpodStatus:String(startedPayload.status||'IN_QUEUE'),safetyNeutralScene:failedScene,safetyNeutralTaskId:String(runwayPayload.id),safetyNeutralRetryAt:new Date().toISOString()};
+      const sessionHash=crypto.createHash('sha256').update(order.stripeSessionId).digest('hex');
+      await Promise.all([put(orderPath,JSON.stringify(order),options),put(`mcs/checkout-sessions/${sessionHash}.json`,JSON.stringify(order),options),order.stripeEventId?put(`mcs/stripe-events/${order.stripeEventId}.json`,JSON.stringify(order),options):Promise.resolve()]);
+      return res.status(200).json({ok:true,scene:failedScene,priorProviderTaskId:failedTask,runwayTaskId:runwayPayload.id,runpodJobId:order.runpodJobId,status:order.runpodStatus});
     }
     if(action==='retry_runway_credits'){
       if(order.mode!=='test'||order.runpodJobId!=='8eca2ae3-d951-41ce-9895-e123c30ad7dc-u1')return res.status(409).json({error:'Exact credit-blocked paid receipt no longer current'});
