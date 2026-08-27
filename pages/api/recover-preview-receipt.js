@@ -21,12 +21,13 @@ export default async function handler(req,res){
   const order=await readJson(`mcs/orders/${TARGET}.json`,token);
   const{key,base}=runpod();
   const headers={Authorization:`Bearer ${key}`};
-  const[jobResponse,endpointResponse,workersResponse]=await Promise.all([
+  const[jobResponse,endpointResponse,workersResponse,healthResponse]=await Promise.all([
     fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{headers}),
     fetch(`https://rest.runpod.io/v1/endpoints/${ENDPOINT}`,{headers}),
-    fetch(`https://api.runpod.io/v2/serverless/${ENDPOINT}/workers`,{headers})
+    fetch(`https://api.runpod.io/v2/serverless/${ENDPOINT}/workers`,{headers}),
+    fetch(`https://api.runpod.ai/v2/${ENDPOINT}/health`,{headers})
   ]);
-  const[job,endpoint,workerPayload]=await Promise.all([json(jobResponse),json(endpointResponse),json(workersResponse)]);
+  const[job,endpoint,workerPayload,health]=await Promise.all([json(jobResponse),json(endpointResponse),json(workersResponse),json(healthResponse)]);
   const workers=Array.isArray(workerPayload?.workers)?workerPayload.workers.map(w=>({id:w.id,status:w.status,desiredStatus:w.desiredStatus,gpu:w.gpu,uptimeSeconds:w.uptimeSeconds})):[];
-  return res.status(200).json({mcsJobId:TARGET,mode:order.mode,stripeSessionId:order.stripeSessionId,runpodJobId:order.runpodJobId,runpodHttp:jobResponse.status,runpodStatus:String(job.status||''),delayTime:job.delayTime??null,executionTime:job.executionTime??null,output:job.output||null,error:job.error||null,endpoint:{http:endpointResponse.status,workersMin:endpoint.workersMin,workersMax:endpoint.workersMax,version:endpoint.version},workers});
+  return res.status(200).json({mcsJobId:TARGET,mode:order.mode,stripeSessionId:order.stripeSessionId,runpodJobId:order.runpodJobId,runpodHttp:jobResponse.status,runpodStatus:String(job.status||''),delayTime:job.delayTime??null,executionTime:job.executionTime??null,output:job.output||null,error:job.error||null,endpoint:{http:endpointResponse.status,workersMin:endpoint.workersMin,workersMax:endpoint.workersMax,version:endpoint.version},health,workers});
 }
