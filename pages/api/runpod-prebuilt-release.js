@@ -26,12 +26,12 @@ async function verifyPublicImage(){
 function body(template){
   const value={
     containerDiskInGb:template.containerDiskInGb,
-    containerRegistryAuthId:undefined,
+    containerRegistryAuthId:null,
     dockerEntrypoint:[],
     dockerStartCmd:[],
     env:template.env||{},
     imageName:IMAGE,
-    isPublic:true,
+    isPublic:false,
     name:template.name,
     ports:template.ports||[],
     readme:template.readme||'',
