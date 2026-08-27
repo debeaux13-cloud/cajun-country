@@ -1,11 +1,9 @@
 import crypto from 'crypto';
 import {head,list,put} from '@vercel/blob';
 import {runpod} from '../_runpod';
-
-const TERMINAL_FAILURES=new Set(['FAILED','CANCELLED','TIMED_OUT']);
+import {orderRecoveryReason} from '../../../lib/order-recovery-reason';
 const ACTIVE=new Set(['IN_QUEUE','IN_PROGRESS']);
 const MAX_RECOVERIES=2;
-const STALE_MS=35*60*1000;
 const COOLDOWN_MS=10*60*1000;
 const CANARY_SOURCE_JOB='9a9bf989-c81d-4dea-9a38-055e7ec9ed7b-u2';
 const CANARY_PATH='mcs/config/order-recovery-canary.json';
@@ -28,15 +26,6 @@ async function latestProgressAt(jobId,token){
   const result=await list({prefix:`mcs/jobs/${jobId}/`,limit:1000,token});
   const relevant=result.blobs.filter(blob=>/\/(?:progress-|provider-tasks\/)/.test(blob.pathname));
   return relevant.reduce((latest,blob)=>Math.max(latest,new Date(blob.uploadedAt||0).getTime()||0),0);
-}
-
-export function recoveryReason(job,latestProgress,now=Date.now()){
-  const status=String(job?.status||'').toUpperCase();
-  if(TERMINAL_FAILURES.has(status))return `terminal_${status.toLowerCase()}`;
-  if(!ACTIVE.has(status))return '';
-  const providerAge=status==='IN_QUEUE'?Number(job?.delayTime||0):Number(job?.executionTime||0);
-  const silentAge=latestProgress?now-latestProgress:providerAge;
-  return Math.max(providerAge,silentAge)>STALE_MS?`stuck_${status.toLowerCase()}`:'';
 }
 
 async function saveOrder(order,token){
@@ -77,7 +66,7 @@ async function runRecoveryCanary(headers,base,token){
   const statusResponse=await fetch(`${base}/status/${CANARY_SOURCE_JOB}`,{headers});
   const source=await statusResponse.json().catch(()=>({}));
   if(!statusResponse.ok)return{ok:false,stage:'source_unavailable'};
-  const reason=recoveryReason(source,0);
+  const reason=orderRecoveryReason(source,0);
   if(!reason)return{ok:false,stage:'source_not_failed',sourceStatus:String(source.status||'')};
   const started=await fetch(`${base}/run`,{method:'POST',headers,body:JSON.stringify({input:{type:'health'}})});
   const payload=await started.json().catch(()=>({}));
@@ -110,7 +99,7 @@ export default async function handler(req,res){
       const job=await response.json().catch(()=>({}));
       if(!response.ok){results.push({orderId:order.mcsJobId,action:'provider_unavailable'});continue}
       const latest=ACTIVE.has(String(job.status||'').toUpperCase())?await latestProgressAt(order.mcsJobId,token):0;
-      const reason=recoveryReason(job,latest);
+      const reason=orderRecoveryReason(job,latest);
       if(!reason)continue;
       const recovered=await requeue(order,reason,headers,base,token);
       results.push({orderId:order.mcsJobId,action:'requeued',reason,newJobId:recovered.runpodJobId});
