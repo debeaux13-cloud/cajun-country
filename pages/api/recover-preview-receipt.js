@@ -6,9 +6,9 @@ const TARGET='69efa6be-ef6d-426d-ac04-7dd28fd6d3f2';
 const ENDPOINT='id81aby9nfth9h';
 const ACCESS='mcs-receipt-20260827-7f9d1e6c';
 const TEMPLATE='2w5x8empgg';
-const SOURCE_BLOB='ab19e7cd199b49cd5ec188380bfa6dbb44078470';
-const SOURCE_COMMIT='e622ea40d77ecd2021e63ee79bc969e97fb7d234';
-const BUNDLE_SHA='ffb9fa624ecfa3626b2c5d58428de710772f8082f20ce317aefe723f09dc5125';
+const SOURCE_BLOB='d77000c101a4d569c3b7b1c74416aeca105c8c81';
+const SOURCE_COMMIT='5cd6a9830e7d3cbde1b3a2f84287785d3a741153';
+const BUNDLE_SHA='47e170bda577b44add7a94bcd3facaa91bcf005f3284d8813c25c8f5b7bdc2bf';
 
 async function readJson(pathname,token){
   const meta=await head(pathname,{token});
