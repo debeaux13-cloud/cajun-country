@@ -53,7 +53,7 @@ export default async function handler(req,res){
   res.setHeader('Referrer-Policy','no-referrer');
   if(req.method!=='POST')return res.status(405).json({error:'POST only'});
   if(!authorized(req))return res.status(401).json({error:'Unauthorized'});
-  const{key}=runpod();
+  const{key,base}=runpod();
   if(!key)return res.status(503).json({error:'RunPod configuration missing'});
   const headers={Authorization:`Bearer ${key}`,'Content-Type':'application/json'};
   try{
@@ -76,6 +76,13 @@ export default async function handler(req,res){
       if(!up.ok)throw new Error(`Endpoint activation failed (${up.status})`);
       console.info('Prebuilt MCS worker activated',{image:IMAGE});
       return res.status(200).json({ok:true,phase:'prebuilt_active',image:IMAGE});
+    }
+    if(req.body?.action==='probe'){
+      const started=Date.now();
+      const response=await fetch(`${base}/runsync`,{method:'POST',headers,body:JSON.stringify({input:{action:'version'}})});
+      const payload=await json(response);
+      if(!response.ok)throw new Error(`Startup probe failed (${response.status})`);
+      return res.status(200).json({ok:true,elapsedMs:Date.now()-started,id:String(payload?.id||''),status:String(payload?.status||''),output:payload?.output||null});
     }
     if(req.body?.action==='status'){
       const[templateResponse,current]=await Promise.all([
