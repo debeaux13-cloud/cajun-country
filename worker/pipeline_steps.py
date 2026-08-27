@@ -548,21 +548,51 @@ def _compact_prompt_value(value, limit: int) -> str:
     return compact[:limit].rsplit(" ", 1)[0].rstrip(" ,.;")
 
 
+def canonical_character_prompt(identity_lock: str) -> str:
+    """Normalize the upload once so every scene starts from one character design."""
+    identity = _compact_prompt_value(identity_lock, 570)
+    prompt = (
+        f"@Subject=upload. CHARACTER MASTER LOCK: {identity}. "
+        "Use the upload only as evidence of each subject's identity, anatomy, facial features, coat/skin/hair colors, markings, clothing, and relative size. "
+        "Ignore and remove the upload's background, lighting, camera artifacts, era, sepia/monochrome cast, filter, photographic realism, and art style. "
+        "Create one clean 16:9 full-subject cast portrait on a simple neutral pale studio set. "
+        "Warm dimensional animated 3D CGI: tactile detail and soft cinematic depth, between flat cartoon and photoreal. "
+        "Every person and animal stays separate and recognizable; no swaps, hybrids, duplicates, text, logos, or collage panels."
+    )
+    if len(prompt) > 1000:
+        raise ValueError("Character master prompt exceeded Runway's 1,000-character limit")
+    return prompt.rstrip()
+
+
+def create_character_master(
+    reference_path: str,
+    identity_lock: str,
+    destination: str,
+    on_task_created=None,
+    existing_task_id: str | None = None,
+) -> str:
+    return _runway_reference_image(
+        reference_path,
+        canonical_character_prompt(identity_lock),
+        destination,
+        on_task_created,
+        existing_task_id=existing_task_id,
+    )
+
+
 def locked_still_prompt(scene: dict) -> str:
     """Put identity, stylization, and scene truth inside Runway's hard 1,000-character limit."""
-    # The API builds an evenly budgeted, scene-specific lock capped at 500
-    # characters. Keep that lock whole so the last IDs in a large group are
-    # never discarded merely because they occur after S1 in the prompt.
-    identity = _compact_prompt_value(scene.get("identityLock"), 500)
+    identity = _compact_prompt_value(scene.get("identityLock"), 470)
     setting = _compact_prompt_value(scene.get("setting"), 48)
     action = _compact_prompt_value(scene.get("visibleAction") or scene.get("description"), 65)
     required = _compact_prompt_value(", ".join(scene.get("requiredVisibleDetails") or []), 48)
     supporting = _compact_prompt_value(", ".join(scene.get("supportingCharacters") or []), 22)
     prompt = (
-        f"@Subject=upload. LOCK: {identity}. "
-        "STYLE: warm dimensional stylized 3D CGI; tactile texture, soft cinematic depth; not photoreal or flat 2D. "
+        f"@Subject=canonical character master. LOCK: {identity}. "
+        "Preserve the master's exact character design, natural colors, markings, anatomy, face, clothing, and relative size. "
+        "STYLE: warm dimensional animated 3D CGI; tactile texture and soft cinematic depth; between flat cartoon and photoreal. "
         f"SET: {setting}. ACT: {action}. SHOW: {required}. EXTRAS: {supporting or 'scene-listed only'}. "
-        "New 16:9. Only locked upload IDs; exact and separate. No swaps, hybrids, duplicates, anatomy errors, source backdrop, text/logo/collage."
+        "New 16:9 scene; replace the neutral master set. No color/coat changes, swaps, hybrids, duplicates, anatomy errors, text, logo, or collage."
     )
     if len(prompt) > 1000:
         raise ValueError("Locked still prompt exceeded Runway's 1,000-character limit")
