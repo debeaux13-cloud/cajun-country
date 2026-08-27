@@ -8,7 +8,7 @@ from audio_polish import add_background_music, create_background_music, normaliz
 from pipeline_steps import build_movie, build_pdf, illustrate, locked_motion_scene_prompt, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
 from runway_adapter import RunwayGen4Turbo
 
-BUNDLE_VERSION="2026-08-26-mcs-v18-ai-story-director-stylized-family-final"
+BUNDLE_VERSION="2026-08-27-mcs-v19-controlled-preview-recovery"
 
 def req(name):
     v=os.environ.get(name,"").strip()
@@ -138,9 +138,9 @@ def handler(event):
                     on_task_created=lambda task_id,**retry:animation_started(task_id,provider="runway-gen4-turbo-motion-retry",**retry)
                 )
                 verify_obvious_clip_motion(video)
-        except Exception:
+        except Exception as error:
             if animation_task["id"]:
-                try:update("animating",n,"provider_failed",provider="runway-gen4-turbo",providerJobId=animation_task["id"])
+                try:update("animating",n,"provider_failed",provider="runway-gen4-turbo",providerJobId=animation_task["id"],error=str(error)[:1200])
                 except Exception:pass
             raise
         upload("scene-video",video,n,"video/mp4"); update("animating",n,"animated",provider="runway-gen4-turbo",providerJobId=provider_job_id); runpod.serverless.progress_update(event,f"Scene {index} finished")
@@ -167,7 +167,7 @@ def handler(event):
                 return {"jobId":job_id,"status":"ready","mode":mode,"completed":1,"identityProbe":True}
             if preview:
                 rendered=[None]*6
-                with ThreadPoolExecutor(max_workers=6) as ex:
+                with ThreadPoolExecutor(max_workers=5) as ex:
                     fut={ex.submit(render_scene,root,reference,s,i):i-1 for i,s in enumerate(scenes,start=1)}
                     for f in as_completed(fut):rendered[fut[f]]=f.result()
                 images=[x[0] for x in rendered]; narr=[x[1] for x in rendered]; sounds=[x[2] for x in rendered]; vids=[x[3] for x in rendered]; validate_unique_scene_images(images)

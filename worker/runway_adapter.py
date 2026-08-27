@@ -49,6 +49,7 @@ class RunwayGen4Turbo:
         max_safety_output_retries = 1
         bad_output_retries = 0
         safety_output_retries = 0
+        generic_zero_cost_retries = 0
         task_id = str(existing_task_id or "").strip()
         prompt_image = ""
         prompt_text = locked_animation_prompt(prompt)
@@ -138,6 +139,27 @@ class RunwayGen4Turbo:
                     prior_task_id = task_id
                     task_id = create_task({
                         "retryAttempt": safety_output_retries,
+                        "priorProviderJobId": prior_task_id,
+                        "priorFailureCode": failure_code,
+                        "priorCredits": credits,
+                    })
+                    deadline = time.monotonic() + 12 * 60
+                    continue
+                retryable_zero_cost_failure = (
+                    payload.get("status") == "FAILED"
+                    and zero_cost_failure
+                    and not failure_code.startswith("INTERNAL.BAD_OUTPUT.")
+                    and failure_code != "SAFETY.OUTPUT.VIDEO"
+                )
+                if retryable_zero_cost_failure and generic_zero_cost_retries < 1:
+                    generic_zero_cost_retries += 1
+                    prompt_text = locked_animation_prompt(
+                        "Wholesome warm stylized 3D CGI. The principal character immediately performs the visible story action with strong natural full-body movement, clear position changes, blinking, breathing, and direct prop interaction. Preserve exact identity and anatomy."
+                    )
+                    time.sleep(2)
+                    prior_task_id = task_id
+                    task_id = create_task({
+                        "retryAttempt": generic_zero_cost_retries,
                         "priorProviderJobId": prior_task_id,
                         "priorFailureCode": failure_code,
                         "priorCredits": credits,
