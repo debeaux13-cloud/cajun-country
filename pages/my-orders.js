@@ -18,6 +18,7 @@ export default function MyOrders(){
   const[orderId,setOrderId]=useState('');
   const[order,setOrder]=useState(null);
   const[error,setError]=useState('');
+  const[lastChecked,setLastChecked]=useState('');
 
   useEffect(()=>{
     if(!router.isReady)return;
@@ -50,7 +51,7 @@ export default function MyOrders(){
         const result=await response.json();
         if(!response.ok&&response.status!==202)throw new Error(result.error||'Order status is unavailable');
         if(!active)return;
-        setOrder(result);setError('');
+        setOrder(result);setError('');setLastChecked(new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit',second:'2-digit'}));
         if(!['ready','needs_attention'].includes(result.state))timer=setTimeout(check,12000);
       }catch(e){
         if(!active)return;
@@ -68,10 +69,16 @@ export default function MyOrders(){
       {!sessionId&&<section style={{marginTop:24,background:'#fff',border:'1px solid #e6d8e8',borderRadius:22,padding:24}}><h2>Your movies live here.</h2><p>Open the confirmation link from your checkout on this device to see the latest order.</p></section>}
       {sessionId&&<section style={{marginTop:24,background:'#fff',border:'1px solid #e6d8e8',borderRadius:22,padding:24}}>
         <div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'center',flexWrap:'wrap'}}>
-          <div><small style={{letterSpacing:1.5,fontWeight:900,color:'#7b2cff'}}>3-MINUTE PERSONALIZED MOVIE</small><h2 style={{margin:'8px 0'}}>Payment received</h2></div>
+          <div><small style={{letterSpacing:1.5,fontWeight:900,color:'#7b2cff'}}>3-MINUTE PERSONALIZED MOVIE</small><h2 style={{margin:'8px 0'}}>{order?.state==='ready'?'Your movie is ready':order?.state==='rendering'?'Your movie is being made':'Payment received'}</h2></div>
           <strong style={{padding:'10px 14px',borderRadius:999,background:'#f0e5ff',color:'#5f20b5'}}>{label(order?.state)}</strong>
         </div>
         <p style={{fontSize:18,lineHeight:1.6}}>{order?.message||'Your movie is continuing from the preview you approved.'}</p>
+        {order&&!['ready','needs_attention'].includes(order.state)&&<div style={{margin:'20px 0',padding:18,borderRadius:18,background:'#fbf4ff',border:'1px solid #e3d1f5'}}>
+          <strong style={{display:'block',fontSize:18,marginBottom:10}}>{order.state==='rendering'?'Production is active':'Preparing production'}</strong>
+          <progress aria-label='Movie production is active' style={{width:'100%',height:18,accentColor:'#7b2cff'}}/>
+          <p style={{margin:'10px 0 4px',lineHeight:1.5}}>Scenes 7–18 are being created, narrated, and assembled automatically.</p>
+          <small style={{color:'#6d6073'}}>This page checks automatically every 12 seconds{lastChecked?` · Last checked ${lastChecked}`:''}.</small>
+        </div>}
         {order?.progress!=null&&<p><b>Latest update:</b> {String(order.progress)}</p>}
         {order?.completedScenes&&<p><b>Scenes complete:</b> {order.completedScenes} of 18</p>}
         {error&&<p style={{color:'#8a2d2d'}}>We could not refresh this second. Your order is safe and this page will try again.</p>}
