@@ -14,10 +14,21 @@ if "requests" not in sys.modules:
     except ModuleNotFoundError:
         sys.modules["requests"] = types.ModuleType("requests")
 
-from pipeline_steps import locked_still_prompt  # noqa: E402
+from pipeline_steps import canonical_character_prompt, locked_still_prompt  # noqa: E402
 
 
 class LockedStillPromptTest(unittest.TestCase):
+    def test_character_master_keeps_twelve_subject_ids_inside_runway_limit(self):
+        details = " | ".join(f"S{index}=subject-{index}-marker" for index in range(1, 13))
+        identity = (
+            f"PHOTO SCENE IDS (12/12): {details}. Keep IDs exact and distinct. "
+            "Preserve each subject's anatomy, face, natural color, markings, clothing, and relative size."
+        )
+        prompt = canonical_character_prompt(identity)
+        self.assertLessEqual(len(prompt), 1000)
+        self.assertIn("S1=subject-1-marker", prompt)
+        self.assertIn("S12=subject-12-marker", prompt)
+
     def test_keeps_all_twelve_scene_ids_inside_runway_limit(self):
         details = " | ".join(f"S{index}=subject-{index}-marker" for index in range(1, 13))
         identity = (
