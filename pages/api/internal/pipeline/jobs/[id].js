@@ -1,5 +1,8 @@
 import{BlobNotFoundError,head,put}from'@vercel/blob';
-import{subjectContract}from'../../../../../lib/subject-contract';
+import{compileStoryScreenplay}from'../../../_story-screenplay';
+import{normalizeSubjects,subjectContract}from'../../../../../lib/subject-contract';
+
+export const config={maxDuration:300};
 
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PROVIDER_PHASES=['image','animation'];
@@ -7,7 +10,25 @@ const PROVIDER_PHASES=['image','animation'];
 function auth(req){const secret=process.env.MCS_WORKER_SECRET||'';const header=req.headers.authorization||'';return!!secret&&(header==='Bearer '+secret||header===secret)}
 function validJobId(id){return UUID.test(String(id||''))}
 async function readPrivateJson(pathname,token){const meta=await head(pathname,{token});const response=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error(`Private Blob fetch failed ${response.status}`);return response.json()}
-async function loadStageData(id){const token=process.env.BLOB_READ_WRITE_TOKEN;if(!token)throw new Error('Blob storage missing');const saved=await readPrivateJson(`mcs/jobs/${id}/story-plan.bin`,token);if(!Array.isArray(saved?.screenplay?.scenes)||saved.screenplay.scenes.length!==18)throw new Error('Structured 18-scene screenplay missing');return saved}
+async function loadStageData(id){
+  const token=process.env.BLOB_READ_WRITE_TOKEN;
+  if(!token)throw new Error('Blob storage missing');
+  const pathname=`mcs/jobs/${id}/story-plan.bin`;
+  const saved=await readPrivateJson(pathname,token);
+  if(Array.isArray(saved?.screenplay?.scenes)&&saved.screenplay.scenes.length===18)return saved;
+  const plan=String(saved?.plan||saved?.storyBrief||saved?.originalIdea||'').trim();
+  if(!plan)throw new Error('Legacy story plan has no recoverable story text');
+  const moods=storyMoods(saved);
+  const screenplay=await compileStoryScreenplay(plan,moods,{
+    originalIdea:String(saved?.originalIdea||''),
+    sourceLedger:saved?.sourceLedger||null,
+    subjectRoster:normalizeSubjects(saved?.subjectIdentity)
+  });
+  const upgraded={...saved,plan,moods,selectedVibe:moods[0],screenplay};
+  await put(pathname,JSON.stringify(upgraded),{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',token});
+  console.info('Legacy paid story plan upgraded',{id,sceneCount:screenplay.scenes.length});
+  return upgraded;
+}
 function storyScenes(saved){return saved.screenplay.scenes.map((scene,index)=>{const identityLock=String(scene.identityLock||'Preserve exact uploaded identity and anatomy.').slice(0,330);return{...scene,identityLock,sceneNumber:index+1,staticLevel:0,hero_scene:true,animationProvider:'runway-gen4-turbo',requiredVisibleDetails:[...(scene.requiredVisibleDetails||[]),identityLock]}})}
 function checkpointPath(id,phase,scene){return`mcs/jobs/${id}/provider-tasks/${phase}-scene-${scene}.json`}
 async function loadProviderJobs(id){const token=process.env.BLOB_READ_WRITE_TOKEN;if(!token)throw new Error('Blob storage missing');const records=await Promise.all(Array.from({length:12},(_,index)=>index+7).flatMap(scene=>PROVIDER_PHASES.map(async phase=>{try{return await readPrivateJson(checkpointPath(id,phase,scene),token)}catch(error){if(error instanceof BlobNotFoundError)return null;throw error}})));const jobs={};for(const record of records.filter(Boolean)){const scene=Number(record.sceneNumber);const taskId=String(record.providerJobId||'');if(scene<7||scene>18||!UUID.test(taskId)||record.status==='provider_failed')continue;const entry=jobs[String(scene)]||(jobs[String(scene)]={});if(record.phase==='image'){entry.imageProviderJobId=taskId;entry.imageProvider=String(record.provider||'');entry.imageStatus=String(record.status||'')}if(record.phase==='animation'){entry.animationProviderJobId=taskId;entry.animationProvider=String(record.provider||'');entry.animationStatus=String(record.status||'');entry.providerJobId=taskId}}return jobs}
