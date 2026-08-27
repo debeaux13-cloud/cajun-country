@@ -35,6 +35,18 @@ export default async function handler(req,res){
   const orderPath=`mcs/orders/${TARGET}.json`;
   let order=await readJson(orderPath,token);
   const{key,base}=runpod();
+  const logWorker=String(req.query?.logs||'');
+  if(req.method==='GET'&&/^[a-z0-9]{14}$/.test(logWorker)){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),4500);
+    const response=await fetch(`https://api.runpod.io/v2/serverless/${ENDPOINT}/workers/${logWorker}/logs?tail=300`,{headers:{Authorization:`Bearer ${key}`},signal:controller.signal});
+    const reader=response.body?.getReader();
+    const decoder=new TextDecoder();
+    let output='';
+    try{while(reader&&output.length<120000){const part=await reader.read();if(part.done)break;output+=decoder.decode(part.value,{stream:true})}}catch{}
+    clearTimeout(timer);
+    return res.status(response.ok?200:response.status).json({workerId:logWorker,http:response.status,logs:output.slice(-100000)});
+  }
   if(req.method==='POST'){
     if(String(req.body?.action||'')!=='requeue_paid_test')return res.status(400).json({error:'Unsupported action'});
     if(order.mode!=='test'||order.runpodJobId!=='dbf83f13-62f3-4288-846f-b3ee74490b68-u2')return res.status(409).json({error:'Exact queued test receipt no longer current'});
