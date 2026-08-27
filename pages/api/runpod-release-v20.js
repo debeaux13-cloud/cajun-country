@@ -38,6 +38,9 @@ export default async function handler(req,res){
    const id=String(req.body?.jobId||'');if(!id)return res.status(400).json({error:'jobId required'});
    const r=await fetch(`https://api.runpod.ai/v2/${ENDPOINT_ID}/status/${id}`,{headers});const p=await json(r);return res.status(r.ok?200:r.status).json({ok:r.ok,payload:p});
   }
+  if(action==='health'||action==='purge'){
+   const r=await fetch(`https://api.runpod.ai/v2/${ENDPOINT_ID}/${action==='purge'?'purge-queue':'health'}`,{method:action==='purge'?'POST':'GET',headers});const p=await json(r);return res.status(r.ok?200:r.status).json({ok:r.ok,payload:p});
+  }
   return res.status(400).json({error:'Unsupported action'});
  }catch(error){return res.status(502).json({error:String(error?.message||error).slice(0,400)})}
 }
