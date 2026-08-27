@@ -1,0 +1,10 @@
+{
+  "name": "mcs-worker-orchestrator",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "24.x" },
+  "dependencies": {
+    "@vercel/blob": "2.4.0",
+    "express": "5.1.0"
+  }
+}
