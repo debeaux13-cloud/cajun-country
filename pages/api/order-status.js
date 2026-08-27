@@ -101,6 +101,23 @@ export default async function handler(req,res){
       return res.status(409).json({error:'This checkout does not match the saved order'});
     }
 
+    if(String(order.status||'').toLowerCase()==='failed'){
+      const refunded=String(order.customerState||'')==='refunded'||Boolean(order.refundId);
+      return res.status(200).json({
+        ok:true,
+        state:'needs_attention',
+        completedScenes:null,
+        progress:null,
+        message:refunded
+          ?'This movie could not be completed. Your payment was automatically refunded.'
+          :'This movie could not be completed. Your automatic refund is being processed.',
+        movieUrl:null,
+        storybookUrl:null,
+        refunded,
+        refundStatus:String(order.refundStatus||'')||null
+      });
+    }
+
     const {key:runpodKey,base}=runpod();
     if(!runpodKey||!base)return res.status(503).json({error:'Movie rendering is not configured'});
     const response=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{
