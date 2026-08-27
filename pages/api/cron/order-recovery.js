@@ -42,7 +42,20 @@ async function saveOrder(order,token){
   await Promise.all(writes);
 }
 
+async function ensurePaidContract(order){
+  const secret=process.env.MCS_WORKER_SECRET||'';
+  if(!secret)throw new Error('Paid contract preflight secret missing');
+  const response=await fetch(`https://main-character-studios.vercel.app/api/internal/pipeline/jobs/${encodeURIComponent(order.mcsJobId)}`,{
+    headers:{Authorization:`Bearer ${secret}`},
+    cache:'no-store'
+  });
+  if(response.ok)return response.json();
+  const payload=await response.json().catch(()=>({}));
+  throw new Error(`Paid contract preflight failed (${response.status}): ${String(payload?.error||'unknown contract error').slice(0,240)}`);
+}
+
 async function requeue(order,reason,headers,base,token){
+  await ensurePaidContract(order);
   const oldJobId=String(order.runpodJobId||'');
   if(reason.startsWith('stuck_')){
     const cancelled=await fetch(`${base}/cancel/${encodeURIComponent(oldJobId)}`,{method:'POST',headers});
@@ -100,7 +113,7 @@ export default async function handler(req,res){
       const createdAt=new Date(order.createdAt||0).getTime()||0;
       if(!createdAt||Date.now()-createdAt>ELIGIBLE_AGE_MS){results.push({orderId:order.mcsJobId,action:'outside_recovery_window'});continue}
       const attempts=Number(order.recoveryAttempts||0);
-      const recoveryLimit=order.mcsJobId===PREBUILT_MIGRATION_ORDER?MAX_RECOVERIES+1:MAX_RECOVERIES;
+      const recoveryLimit=order.mcsJobId===PREBUILT_MIGRATION_ORDER?MAX_RECOVERIES+2:MAX_RECOVERIES;
       if(attempts>=recoveryLimit){results.push({orderId:order.mcsJobId,action:'max_recoveries'});continue}
       const lastRecovery=new Date(order.lastRecoveryAt||0).getTime()||0;
       if(Date.now()-lastRecovery<COOLDOWN_MS)continue;
