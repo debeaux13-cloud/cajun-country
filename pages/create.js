@@ -5,13 +5,11 @@ const MAX_SOURCE_BYTES=25*1024*1024;
 const MAX_READY_BYTES=3*1024*1024;
 const MAX_SOURCE_PIXELS=60000000;
 const VIBES=[
-  {value:'surprise me',label:'Surprise Me'},
   {value:'funny',label:'Funny'},
-  {value:'magical',label:'Magical'},
-  {value:'adventure',label:'Adventure'},
-  {value:'heartwarming',label:'Heartwarming'},
-  {value:'mystery',label:'Mystery'},
-  {value:'kid-safe spooky',label:'Kid-Safe Spooky'}
+  {value:'silly',label:'Silly'},
+  {value:'dramatic',label:'Dramatic'},
+  {value:'spooky',label:'Spooky'},
+  {value:'romantic',label:'Romantic'}
 ];
 
 function canvasJpeg(canvas,quality){return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('This browser could not prepare the photo.')),'image/jpeg',quality))}
@@ -55,7 +53,7 @@ export default function Create(){
   const[image,setImage]=useState('');
   const[photoCheck,setPhotoCheck]=useState(null);
   const[checkingPhoto,setCheckingPhoto]=useState(false);
-  const[vibe,setVibe]=useState('surprise me');
+  const[vibe,setVibe]=useState('');
   const[busy,setBusy]=useState(false);
   const stageRequest=useRef(false);
   const previewRequest=useRef(false);
@@ -70,19 +68,19 @@ export default function Create(){
   async function stage(){
     if(stageRequest.current)return;
     if(!image){setStatus('Add the individual or group photo first so Stage can build the story around everyone in it.');return}
-    if(!idea.trim()){setStatus('Type a story idea in the black AI Story Chat box before continuing.');return}
+    if(!idea.trim()&&!vibe){setStatus('Choose a story type or tell the AI your own idea before continuing.');return}
     if(checkingPhoto){setStatus('Give us a moment to finish checking that photo.');return}
     if(photoCheck?.status==='retry_required'){setStatus('Choose another photo before creating the story. The current photo does not show enough reliable identity detail.');return}
     const draftAttempt=Math.min(3,draftsUsed+1);
     const priorStoryBriefs=drafts.map(draft=>draft.storyBrief).filter(Boolean);
     const priorSourceLedgers=drafts.map(draft=>draft.sourceLedger).filter(Boolean);
-    const requestMode='my_story';
+    const requestMode=idea.trim()?'my_story':'make_for_me';
     stageRequest.current=true;
     setBusy(true);
-    setStatus('Turning your idea into one complete story…');
+    setStatus(requestMode==='make_for_me'?'Inventing one complete story around everyone in your photo…':'Turning your idea into one complete story…');
     try{
       const requestIdea=idea;
-      const requestMoods=[vibe];
+      const requestMoods=[vibe||'surprise me'];
       const response=await fetch('/api/stage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({creativeMode:requestMode,idea:requestIdea,moods:requestMoods,image:image||undefined,draftAttempt,priorStoryBriefs,priorSourceLedgers})});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error||'Stage failed');
@@ -167,7 +165,7 @@ export default function Create(){
       <h1 className='createTitle' style={{fontFamily:'Georgia,serif',fontSize:'clamp(40px,7vw,70px)',marginBottom:8}}>Make them the main character.</h1>
       <p className='createSubtitle' style={{fontSize:18,opacity:.85}}>AI Story Chat included · 3-minute personalized moving movie · first minute free</p>
       <section className='createCard' style={{marginTop:24,background:'#19121f',border:'1px solid #3d2d49',borderRadius:24,padding:20}}>
-        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>START HERE · AI STORY CHAT</b><div style={{opacity:.7}}>Upload a photo, pick a vibe, then type what you want the story to be about in the black box below.</div></div></div>
+        <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>START HERE · AI STORY CHAT</b><div style={{opacity:.7}}>Upload a photo, then choose the kind of story you want—or tell the AI your own idea in the black box.</div></div></div>
         {busy&&<div className='workingToast' role='status' aria-live='polite'><span className='workingSpinner'/><span>{status||'Creating your story…'}</span></div>}
 
         <div style={{margin:'18px 0'}}>
@@ -178,12 +176,12 @@ export default function Create(){
           {photoCheck&&<div className='photoResult' role={photoCheck.status==='retry_required'?'alert':'status'} style={{marginTop:12,padding:'12px 14px',borderRadius:14,lineHeight:1.45,border:`1px solid ${photoCheck.status==='good'?'#4cc38a':photoCheck.status==='caution'?'#d6a33b':'#ff6b6b'}`,background:photoCheck.status==='good'?'#153d2b':photoCheck.status==='caution'?'#4a3512':'#4a1d25'}}><strong>{photoCheck.status==='good'?'✓ This photo is usable':photoCheck.status==='caution'?'This photo is usable—with a heads-up':'Please try another photo'}</strong>{photoCheck.visiblePrincipalSubjectCount>0&&<span> · {photoCheck.visiblePrincipalSubjectCount} principal {photoCheck.visiblePrincipalSubjectCount===1?'subject':'subjects'} visible</span>}<div>{photoCheck.reason}</div><div style={{opacity:.82}}>{photoCheck.tip}</div></div>}
         </div>
 
-        <fieldset className='vibePicker' disabled={busy} style={{border:0,padding:0,margin:'18px 0'}}><legend style={{fontWeight:800,marginBottom:8}}>Choose one vibe</legend><div className='vibeButtons' style={{display:'flex',gap:8,flexWrap:'wrap'}}>{VIBES.map(option=><button className='vibeButton' type='button' key={option.value} aria-pressed={vibe===option.value} onClick={()=>chooseVibe(option.value)} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,background:vibe===option.value?'#7b2cff':'#2b2135',color:'#fff',border:vibe===option.value?'2px solid #b994ff':'1px solid #5c4470'}}>{option.label}</button>)}</div></fieldset>
+        <fieldset className='vibePicker' disabled={busy} style={{border:0,padding:0,margin:'18px 0'}}><legend style={{fontWeight:800,marginBottom:8}}>Do you want me to tell you a…</legend><div className='vibeButtons' style={{display:'flex',gap:8,flexWrap:'wrap'}}>{VIBES.map(option=><button className='vibeButton' type='button' key={option.value} aria-pressed={vibe===option.value} onClick={()=>chooseVibe(option.value)} style={{padding:'9px 13px',borderRadius:999,fontWeight:800,background:vibe===option.value?'#7b2cff':'#2b2135',color:'#fff',border:vibe===option.value?'2px solid #b994ff':'1px solid #5c4470'}}>{option.label}</button>)}</div></fieldset>
 
         {!selectedDraft&&<>
-          <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>TYPE YOUR STORY IDEA HERE</label>
-          <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} required aria-required='true' placeholder='TYPE HERE — for example: “Make a funny rodeo adventure starring everyone in my photo.”' style={{width:'100%',minHeight:120,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
-          <button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'||!idea.trim()} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>
+          <label htmlFor='story-input' style={{display:'block',fontWeight:800,marginBottom:8}}>OR TELL ME YOUR OWN IDEA — I’LL MAKE IT COME ALIVE</label>
+          <textarea className='storyInput' id='story-input' disabled={busy} value={idea} onChange={event=>changeIdea(event.target.value)} placeholder='TYPE HERE — for example: “Make a rodeo adventure starring everyone in my photo.”' style={{width:'100%',minHeight:120,padding:15,borderRadius:16,background:'#0f0b13',color:'#fff',boxSizing:'border-box',fontSize:16}}/>
+          <button className='primaryButton' disabled={busy||checkingPhoto||photoCheck?.status==='retry_required'||(!idea.trim()&&!vibe)} onClick={stage} style={{marginTop:14,padding:'13px 20px',borderRadius:999,fontWeight:900}}>{busy?'Creating your story…':checkingPhoto?'Checking Photo…':'Create My Story'}</button>
         </>}
         <p className='statusLine' style={{minHeight:24}}>{status}</p>
         {selectedDraft&&<>
