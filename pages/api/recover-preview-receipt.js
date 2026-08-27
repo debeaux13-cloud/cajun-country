@@ -83,7 +83,7 @@ export default async function handler(req,res){
       if(order.mode!=='test'||order.runpodJobId!=='8eca2ae3-d951-41ce-9895-e123c30ad7dc-u1')return res.status(409).json({error:'Exact credit-blocked paid receipt no longer current'});
       const before=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{headers:{Authorization:`Bearer ${key}`}});
       const beforeJob=await json(before);
-      if(beforeJob.status!=='FAILED'||!String(beforeJob.error||'').includes('not enough credits'))return res.status(409).json({error:'Paid test is not at the exact Runway credit failure',status:beforeJob.status||'',detail:beforeJob.error||''});
+      if(beforeJob.status!=='FAILED'||!String(beforeJob.error||'').includes('enough credits'))return res.status(409).json({error:'Paid test is not at the exact Runway credit failure',status:beforeJob.status||'',detail:beforeJob.error||''});
       const started=await fetch(base+'/run',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({input:{jobId:TARGET,callbackBase:'https://main-character-studios.vercel.app',mode:'paid',duration_seconds:180,preview_scene_count:6,total_scene_count:18,full_duration_seconds:180,stripeSessionId:order.stripeSessionId}})});
       const startedPayload=await json(started);
       if(!started.ok||!startedPayload.id)return res.status(502).json({error:'Credit-funded paid retry was not accepted',payload:startedPayload});
