@@ -34,7 +34,7 @@ export default async function handler(req,res){
    const[bp,tp]=await Promise.all([json(b),json(t)]);if(!b.ok||bp.encoding!=='base64')throw new Error('V22 bundle lookup failed');if(!t.ok)throw new Error('Template lookup failed');
    const compact=String(bp.content||'').replace(/\s+/g,'');const bytes=Buffer.from(compact,'base64');if(crypto.createHash('sha256').update(bytes).digest('hex')!==BUNDLE_SHA)throw new Error('V22 checksum mismatch');
    const command=`set -euo pipefail; rm -rf /opt/mcs-bundle; mkdir -p /opt/mcs-bundle; python -c "import base64;open('/tmp/mcs-v22.tgz','wb').write(base64.b64decode('${compact}'))"; echo '${BUNDLE_SHA}  /tmp/mcs-v22.tgz' | sha256sum -c -; tar -xzf /tmp/mcs-v22.tgz -C /opt/mcs-bundle; export PYTHONPATH="/opt/mcs-bundle"; echo "MCS source commit: ${SOURCE_COMMIT}"; exec bash /opt/mcs-bundle/start.sh`;
-   const patch=await fetch(`https://rest.runpod.io/v1/templates/${TEMPLATE}`,{method:'PATCH',headers,body:JSON.stringify(templateBody(tp,command))});if(!patch.ok)throw new Error(`Template patch failed (${patch.status})`);
+   const patch=await fetch(`https://rest.runpod.io/v1/templates/${TEMPLATE}/update`,{method:'POST',headers,body:JSON.stringify(templateBody(tp,command))});if(!patch.ok){const detail=await patch.text().catch(()=>\'\');throw new Error(`Template update failed (${patch.status}): ${detail.slice(0,240)}`)};
    const down=await fetch(`https://rest.runpod.io/v1/endpoints/${ENDPOINT}`,{method:'PATCH',headers,body:JSON.stringify({workersMin:0,workersMax:0})});if(!down.ok)throw new Error(`Endpoint scale-down failed (${down.status})`);
    return res.status(200).json({ok:true,phase:'v22_staged',priorJobStatus:status.status||'',sourceCommit:SOURCE_COMMIT,bundleSha:BUNDLE_SHA});
   }
