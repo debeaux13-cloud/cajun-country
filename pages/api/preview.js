@@ -103,7 +103,6 @@ Inventory every visible living person and animal in the uploaded group photo, in
     throw new Error(`Photo retry required: ${reason} Please choose a clearer photo; casual phone pictures and screenshots are welcome.`);
   }
   const description=String(parsed?.identityDescription||'').trim();
-  if(description.length<40)throw new Error('Reference identity analysis was incomplete');
   const uncertain=Array.isArray(parsed?.uncertainDetails)?parsed.uncertainDetails.map(value=>String(value).trim()).filter(Boolean):[];
   const subjects=normalizeSubjects({subjects:(Array.isArray(parsed?.subjects)?parsed.subjects:[]).map((subject,index)=>{
     const kind=String(subject?.kind||'animal').trim();
@@ -121,6 +120,10 @@ Inventory every visible living person and animal in the uploaded group photo, in
     };
   })}).filter(subject=>subject.identityDescription.length>=20);
   if(!subjects.length||subjects.length!==Number(parsed.subjectCount||0))throw new Error('Reference identity analysis did not separate every subject');
+  const identityDescription=description.length>=40
+    ?description
+    :subjects.map(subject=>`${subject.subjectId} ${subject.referencePosition}: ${subject.identityDescription}`).join(' | ');
+  if(identityDescription.length<40)throw new Error('Reference identity analysis was incomplete');
   return{
     subjectCount:Number(parsed.subjectCount||1),
     subjectType:String(parsed.subjectType||'pet'),
@@ -129,7 +132,7 @@ Inventory every visible living person and animal in the uploaded group photo, in
     breedConfidence:String(parsed.breedConfidence||'low'),
     keyMarkers:Array.isArray(parsed.keyMarkers)?parsed.keyMarkers.map(value=>String(value).trim()).filter(Boolean):[],
     breedAlternatives:Array.isArray(parsed.breedAlternatives)?parsed.breedAlternatives.map(value=>String(value).trim()).filter(Boolean):[],
-    identityDescription:description,
+    identityDescription,
     uncertainDetails:uncertain,
     subjects
   };
