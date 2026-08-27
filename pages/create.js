@@ -132,7 +132,7 @@ export default function Create(){
     if(!previewEntitlement){setStatus('Upload the photo again so we can prepare its protected one-preview pass. Your text drafts will stay on this page.');return}
     previewRequest.current=true;
     setBusy(true);
-    setStatus('Your chosen text draft is becoming its one free 60-second moving preview…');
+    setStatus('Your chosen text draft is becoming its one free 1-minute moving preview…');
     async function recoverAcceptedPreview(){
       for(let attempt=0;attempt<30;attempt++){
         if(attempt)await wait(3000);
@@ -166,7 +166,7 @@ export default function Create(){
       </header>
       <div className='pricePill' style={{marginTop:26,padding:'10px 14px',display:'inline-flex',gap:12,alignItems:'center',borderRadius:999,background:'#24182f',border:'1px solid #5c4470'}}><span>3-minute movie</span><strong>$49</strong></div>
       <h1 className='createTitle' style={{fontFamily:'Georgia,serif',fontSize:'clamp(40px,7vw,70px)',marginBottom:8}}>Make them the main character.</h1>
-      <p className='createSubtitle' style={{fontSize:18,opacity:.85}}>AI Story Chat included · 3-minute personalized moving movie · first 60 seconds free</p>
+      <p className='createSubtitle' style={{fontSize:18,opacity:.85}}>AI Story Chat included · 3-minute personalized moving movie · first minute free</p>
       <section className='createCard' style={{marginTop:24,background:'#19121f',border:'1px solid #3d2d49',borderRadius:24,padding:20}}>
         <div className='stageIntro' style={{display:'flex',gap:12,alignItems:'center',marginBottom:14}}><div className='aiBadge' style={{width:42,height:42,borderRadius:99,background:'#7b2cff',display:'grid',placeItems:'center',fontWeight:900}}>AI</div><div><b>STAGE · YOUR AI STORY PARTNER · INCLUDED</b><div style={{opacity:.7}}>Add a photo and choose a vibe. The AI writes one complete story for you to read and edit before the video is made.</div></div></div>
         {busy&&<div className='workingToast' role='status' aria-live='polite'><span className='workingSpinner'/><span>{status||'Creating your story…'}</span></div>}
@@ -200,7 +200,7 @@ export default function Create(){
             {draftsUsed<3&&<button className='secondaryButton' disabled={busy} onClick={stage}>{busy?'Writing a different story…':'Make a different story'}</button>}
             <button className='previewButton' disabled={busy||!photoCheck?.previewEntitlement} onClick={preview}>Preview My Movie Free →</button>
           </div>
-          <p className='simplePreviewCopy'>Watch the first 60 seconds. Love it? Buy the full 3-minute movie and matching storybook PDF. Want a change? Edit this story before previewing.</p>
+          <p className='simplePreviewCopy'>Watch the first minute. Love it? Buy the full 3-minute movie and matching storybook PDF. Want a change? Edit this story before previewing.</p>
         </>}
       </section>
     </div>
