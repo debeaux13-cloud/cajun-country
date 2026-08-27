@@ -553,14 +553,14 @@ def canonical_character_prompt(identity_lock: str) -> str:
     identity = _compact_prompt_value(identity_lock, 570)
     prompt = (
         f"@Subject=upload. CHARACTER MASTER LOCK: {identity}. "
-        "Use the upload only as evidence of each subject's identity, anatomy, facial features, coat/skin/hair colors, markings, clothing, and relative size. "
-        "Ignore and remove the upload's background, lighting, camera artifacts, era, sepia/monochrome cast, filter, photographic realism, and art style. "
-        "Create one clean 16:9 full-subject cast portrait on a simple neutral pale studio set. "
-        "Warm dimensional animated 3D CGI: tactile detail and soft cinematic depth, between flat cartoon and photoreal. "
-        "Every person and animal stays separate and recognizable; no swaps, hybrids, duplicates, text, logos, or collage panels."
+        "Upload defines identity, anatomy, face, colors, markings, clothing, and relative size—not its background or style. "
+        "Clean 16:9 full-subject cast portrait on a neutral pale studio set. "
+        "Warm dimensional animated 3D CGI, between flat cartoon and photoreal. "
+        "Keep every subject separate and recognizable. "
+        "No swaps, hybrids, duplicates, anatomy errors, text, logos, or collage."
     )
-    if len(prompt) > 1000:
-        raise ValueError("Character master prompt exceeded Runway's 1,000-character limit")
+    if len(prompt) > 1000:  # Defensive guard; the bounded fields above must keep this unreachable.
+        raise AssertionError("Bounded character master prompt exceeded 1,000 characters")
     return prompt.rstrip()
 
 
@@ -588,11 +588,11 @@ def locked_still_prompt(scene: dict) -> str:
     required = _compact_prompt_value(", ".join(scene.get("requiredVisibleDetails") or []), 48)
     supporting = _compact_prompt_value(", ".join(scene.get("supportingCharacters") or []), 22)
     prompt = (
-        f"@Subject=canonical character master. LOCK: {identity}. "
-        "Preserve the master's exact character design, natural colors, markings, anatomy, face, clothing, and relative size. "
-        "STYLE: warm dimensional animated 3D CGI; tactile texture and soft cinematic depth; between flat cartoon and photoreal. "
+        f"@Subject=character master. LOCK: {identity}. "
+        "Preserve exact design, colors, markings, anatomy, face, clothing, and relative size. "
+        "STYLE: warm dimensional animated 3D CGI, between flat cartoon and photoreal. "
         f"SET: {setting}. ACT: {action}. SHOW: {required}. EXTRAS: {supporting or 'scene-listed only'}. "
-        "New 16:9 scene; replace the neutral master set. No color/coat changes, swaps, hybrids, duplicates, anatomy errors, text, logo, or collage."
+        "New 16:9 scene; replace the studio set. No color changes, swaps, hybrids, duplicates, anatomy errors, text, logo, or collage."
     )
     if len(prompt) > 1000:
         raise ValueError("Locked still prompt exceeded Runway's 1,000-character limit")
