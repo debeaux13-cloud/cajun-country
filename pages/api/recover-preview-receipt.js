@@ -85,6 +85,31 @@ export default async function handler(req,res){
       const payload=await json(up);
       return res.status(up.ok?200:502).json({ok:up.ok,phase:'v20_active',endpointVersion:payload.version??null,payload});
     }
+    if(action==='resume_local_fallback'){
+      if(order.mode!=='test'||order.runpodJobId!=='94c140d9-8c1a-466d-b123-965802636aee-u1')return res.status(409).json({error:'Exact safety-blocked paid receipt no longer current'});
+      const before=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{headers:{Authorization:`Bearer ${key}`}});
+      const beforeJob=await json(before);
+      const detail=String(beforeJob.error||'');
+      if(beforeJob.status!=='FAILED'||!detail.includes('SAFETY.INPUT.MULTIMODAL'))return res.status(409).json({error:'Paid test is not at the exact Runway input-safety failure',status:beforeJob.status||'',detail});
+      const match=detail.match(/Runway task ([0-9a-f-]{36})/i);
+      if(!match)return res.status(409).json({error:'Failed provider task id missing'});
+      const failedTask=match[1];
+      let failedScene=0;
+      let failedRecord=null;
+      for(let scene=7;scene<=18;scene++){
+        try{const record=await readJson(`mcs/jobs/${TARGET}/provider-tasks/animation-scene-${scene}.json`,token);if(String(record.providerJobId||'')===failedTask){failedScene=scene;failedRecord=record;break}}catch{}
+      }
+      if(!failedScene)return res.status(409).json({error:'Failed provider task is not mapped to a paid scene',failedTask});
+      const options={access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'};
+      await put(`mcs/jobs/${TARGET}/provider-tasks/animation-scene-${failedScene}.json`,JSON.stringify({...failedRecord,status:'provider_started',updatedAt:new Date().toISOString()}),options);
+      const started=await fetch(base+'/run',{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({input:{jobId:TARGET,callbackBase:'https://main-character-studios.vercel.app',mode:'paid',duration_seconds:180,preview_scene_count:6,total_scene_count:18,full_duration_seconds:180,stripeSessionId:order.stripeSessionId}})});
+      const startedPayload=await json(started);
+      if(!started.ok||!startedPayload.id)return res.status(502).json({error:'Local-fallback paid continuation was not accepted',payload:startedPayload,scene:failedScene});
+      order={...order,priorRunpodJobId:order.runpodJobId,runpodJobId:String(startedPayload.id),runpodStatus:String(startedPayload.status||'IN_QUEUE'),localFallbackScene:failedScene,localFallbackTaskId:failedTask,localFallbackRetryAt:new Date().toISOString()};
+      const sessionHash=crypto.createHash('sha256').update(order.stripeSessionId).digest('hex');
+      await Promise.all([put(orderPath,JSON.stringify(order),options),put(`mcs/checkout-sessions/${sessionHash}.json`,JSON.stringify(order),options),order.stripeEventId?put(`mcs/stripe-events/${order.stripeEventId}.json`,JSON.stringify(order),options):Promise.resolve()]);
+      return res.status(200).json({ok:true,scene:failedScene,blockedProviderTaskId:failedTask,runpodJobId:order.runpodJobId,status:order.runpodStatus});
+    }
     if(action==='retry_safety_input'){
       if(order.mode!=='test'||order.runpodJobId!=='94c140d9-8c1a-466d-b123-965802636aee-u1')return res.status(409).json({error:'Exact safety-blocked paid receipt no longer current'});
       const before=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{headers:{Authorization:`Bearer ${key}`}});
