@@ -3,7 +3,7 @@ import {getVercelOidcToken} from '@vercel/oidc';
 const MAX_STORY_CHARACTERS=60000;
 const MAX_MOODS=8;
 const MAX_REFERENCE_BYTES=12*1024*1024;
-const STORY_VIBES=new Set(['surprise me','funny','magical','adventure','heartwarming','mystery','kid-safe spooky']);
+const STORY_VIBES=new Set(['surprise me','funny','silly','dramatic','spooky','romantic']);
 
 export const config={api:{bodyParser:{sizeLimit:'20mb'}}};
 
@@ -341,7 +341,7 @@ AGE, SPECIES, AND RELATIONSHIP SAFETY:
 - Use only visible evidence for age group and species. Children remain children with childlike dialogue, roles, choices, and meaningful agency. Never put a child in adult romance, an adult job, a parenting role, alcohol use, or any adult situation.
 - Adults remain adults. Animals remain animals with their own anatomy and species-appropriate movement even when the fantasy lets them talk or act heroically.
 - In mixed groups, keep every child's, adult's, and animal's role coherent and distinct. Never invent family, romantic, ownership, school, or caregiving relationships that the customer did not state.
-- The selected vibe guides invention. Supported vibes are exactly: surprise me, funny, magical, adventure, heartwarming, mystery, and kid-safe spooky. Kid-safe spooky may be suspenseful but never graphic, cruel, sexual, or adult.
+- The selected vibe guides invention. Supported vibes are exactly: surprise me, funny, silly, dramatic, spooky, and romantic. Spooky may be suspenseful but never graphic, cruel, sexual, or adult. Romantic is gentle adult romance only when the visible cast is clearly adult; for children, families, or animals, interpret romantic as warm love, friendship, loyalty, or affection with no adult situations.
 
 SOURCE-PRESERVATION RULES:
 - First build sourceLedger from the customer's actual words and, whenever a photo is supplied in either creative mode, every principal visible person and animal. Every visible subject and every explicitly named or specifically identified character, key object, major event, turning point, climax, ending, and imaginative rule must have its own requiredSourceFacts entry with a stable FACT-### ID. Give each visibleCast entry its own character FACT whose detail repeats that visibleCast label verbatim, so coverage is auditable. Repeated wording, minor gestures, and incidental dialogue may be summarized rather than logged as separate facts.
@@ -357,6 +357,7 @@ FILM RULES:
 - This is a real short film, not a slideshow. Use setup, discovery, escalation, complications, emotional turns, climax, payoff, and ending.
 - Scenes 1-6 are the free 60-second opening. They must form a compelling mini-act and end on an irresistible continuation beat, not a conclusion.
 - Scenes 7-18 complete the same story with escalation, a real climax, and the customer's satisfying emotional ending.
+- Every scene must causally lead into the next: setup creates the goal, each attempt creates a consequence, the setback changes the plan, and the climax resolves the central problem. No disconnected events, unexplained jumps, random props, or filler.
 - Every scene materially changes what is happening through location, blocking, objective, obstacle, prop, supporting character, discovery, or emotion. Do not use filler whose only change is camera angle.
 - Give enough narration for the full three minutes. Each scene needs roughly 20-30 naturally spoken words. Never narrate Scene 1, Scene 2, chapter labels, or production notes.
 - Narration describes story and emotion, never camera directions. The visual must match it exactly.
