@@ -1,16 +1,34 @@
 import {head} from '@vercel/blob';
 import {runpod} from './_runpod';
 
+async function privateJson(pathname,token){
+  const meta=await head(pathname,{token});
+  const response=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});
+  if(!response.ok)throw new Error('Preview completion record could not be read');
+  return response.json();
+}
+
 async function verifiedPreview(jobId,mcsJobId){
   const token=process.env.BLOB_READ_WRITE_TOKEN;
   const{key,base}=runpod();
   if(!token||!key||!base)throw new Error('Preview verification is not configured');
+
   const response=await fetch(`${base}/status/${encodeURIComponent(jobId)}`,{headers:{Authorization:`Bearer ${key}`}});
   const job=await response.json();
   const output=job.output||{};
-  if(!response.ok||job.status!=='COMPLETED'||output.status!=='ready'||!['preview','preview_sound_resume'].includes(output.mode)||Number(output.completed)!==6){
+  if(response.ok){
+    if(job.status!=='COMPLETED'||output.status!=='ready'||!['preview','preview_sound_resume'].includes(output.mode)||Number(output.completed)!==6){
+      throw new Error('The free preview must be ready before checkout');
+    }
+  }else if(response.status===404){
+    const progress=await privateJson(`mcs/jobs/${mcsJobId}/progress-0.json`,token);
+    if(String(progress?.status||'').toLowerCase()!=='ready'){
+      throw new Error('The free preview must be ready before checkout');
+    }
+  }else{
     throw new Error('The free preview must be ready before checkout');
   }
+
   const assets=await Promise.all([
     head(`mcs/jobs/${mcsJobId}/preview-movie.bin`,{token}),
     ...Array.from({length:6},(_,index)=>head(`mcs/jobs/${mcsJobId}/scene-video-${index+1}.bin`,{token}))
