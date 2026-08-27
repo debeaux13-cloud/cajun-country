@@ -26,7 +26,7 @@ async function verifyPublicImage(){
 function body(template){
   const value={
     containerDiskInGb:template.containerDiskInGb,
-    containerRegistryAuthId:null,
+    containerRegistryAuthId:template.containerRegistryAuthId||undefined,
     dockerEntrypoint:[],
     dockerStartCmd:[],
     env:template.env||{},
