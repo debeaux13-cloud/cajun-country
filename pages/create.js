@@ -173,13 +173,17 @@ export default function Create(){
       let response;
       try{response=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({previewEntitlement,creativeMode:selectedDraft.creativeMode,storyBrief:selectedDraft.storyBrief,sourceLedger:selectedDraft.sourceLedger,originalIdea:selectedDraft.originalIdea,plan:selectedDraft.plan,image,moods:selectedDraft.moods})})}catch{
         const recovered=await recoverAcceptedPreview();
-        location.href='/preview?jobId='+encodeURIComponent(recovered.jobId)+'&mcsJobId='+encodeURIComponent(recovered.mcsJobId);
+        const previewUrl='/preview?jobId='+encodeURIComponent(recovered.jobId)+'&mcsJobId='+encodeURIComponent(recovered.mcsJobId);
+        window.localStorage.setItem('mcs-latest-preview',JSON.stringify({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()}));
+        location.href=previewUrl;
         return;
       }
       let result={};try{result=await response.json();}catch{}
       if(!response.ok)throw new Error(result.error||'Preview failed');
       if(response.status===202||!result.jobId)result=await recoverAcceptedPreview();
-      location.href='/preview?jobId='+encodeURIComponent(result.jobId)+'&mcsJobId='+encodeURIComponent(result.mcsJobId);
+      const previewUrl='/preview?jobId='+encodeURIComponent(result.jobId)+'&mcsJobId='+encodeURIComponent(result.mcsJobId);
+      window.localStorage.setItem('mcs-latest-preview',JSON.stringify({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()}));
+      location.href=previewUrl;
     }catch(error){previewRequest.current=false;setStatus(error.message);setBusy(false)}
   }
 
@@ -256,7 +260,7 @@ export default function Create(){
       .vibeButtons{gap:10px!important}
       .vibeButton{color:#24152e!important;background:#f7eef8!important;border:1px solid #d8c1e2!important;min-height:44px}
       .vibeButton[aria-pressed="true"]{color:#fff!important;background:linear-gradient(135deg,#ef5e72,#8c2bb6)!important;border-color:transparent!important;box-shadow:0 8px 20px rgba(122,42,184,.2)}
-      .storyChatPanel{margin-top:18px;padding:16px;border-radius:20px;background:#09070b;color:#fff;border:3px solid #24152e;box-shadow:0 14px 36px rgba(36,21,46,.25)}.chatTitle{font-size:20px;font-weight:900;letter-spacing:.5px;color:#ff7ead;margin-bottom:12px}.chatMessages{display:grid;gap:9px;max-height:300px;overflow:auto;margin-bottom:14px}.chatBubble{padding:11px 13px;border-radius:15px;line-height:1.45}.assistantBubble{background:#24182f;border:1px solid #5c4470}.userBubble{background:linear-gradient(135deg,#7a2ab8,#ef4b8c);margin-left:12%}.typeHereLabel{display:block;font-weight:900;color:#fff;margin:4px 0 8px}.storyInput{width:100%!important;border:2px solid #ff7ead!important;background:#000!important;color:#fff!important;box-shadow:0 0 0 3px rgba(255,126,173,.12);line-height:1.55;resize:vertical}.chatInput{min-height:100px;padding:14px;border-radius:14px;font-size:16px}.sendChatButton{margin-top:10px;border:0;border-radius:999px;padding:11px 17px;background:#fff;color:#24152e;font-weight:900;cursor:pointer}
+      .storyChatPanel{margin-top:18px;padding:24px;border-radius:20px;background:#09070b;color:#fff;border:3px solid #24152e;box-shadow:0 14px 36px rgba(36,21,46,.25);min-height:68vh;display:flex;flex-direction:column}.chatTitle{font-size:28px;font-weight:900;letter-spacing:.5px;color:#ff7ead;margin-bottom:18px}.chatMessages{display:grid;gap:12px;min-height:34vh;max-height:52vh;overflow:auto;margin-bottom:20px;font-size:20px}.chatBubble{padding:16px 18px;border-radius:15px;line-height:1.55}.assistantBubble{background:#24182f;border:1px solid #5c4470}.userBubble{background:linear-gradient(135deg,#7a2ab8,#ef4b8c);margin-left:12%}.typeHereLabel{display:block;font-size:22px;font-weight:900;color:#fff;margin:8px 0 10px}.storyInput{width:100%!important;border:2px solid #ff7ead!important;background:#000!important;color:#fff!important;box-shadow:0 0 0 3px rgba(255,126,173,.12);line-height:1.55;resize:vertical}.chatInput{min-height:190px;padding:18px;border-radius:14px;font-size:20px}.sendChatButton{margin-top:14px;min-height:54px;width:100%;border:0;border-radius:999px;padding:14px 20px;background:#fff;color:#24152e;font-size:18px;font-weight:900;cursor:pointer}
       .storyInput::placeholder{color:#d8cfe0;font-weight:800}
       .primaryButton,.previewButton{border:0!important;color:#fff!important;background:linear-gradient(135deg,#ef5e72,#ef4b8c 45%,#8c2bb6)!important;box-shadow:0 12px 28px rgba(178,52,137,.22);cursor:pointer;font-size:16px}
       .secondaryButton,.draftButton{color:#5b267d!important;background:#f5eaf8!important;border:1px solid #d8c1e2!important;cursor:pointer}
@@ -282,6 +286,7 @@ export default function Create(){
         .createTitle{font-size:30px!important;line-height:1.05!important;margin-top:18px!important}
         .createSubtitle{font-size:15px!important;line-height:1.45}
         .createCard{padding:14px!important;border-radius:18px!important}
+        .storyChatPanel{padding:18px!important;min-height:72vh}.chatTitle{font-size:24px}.chatMessages{min-height:36vh;max-height:55vh;font-size:19px}.chatInput{min-height:180px;font-size:18px}
         .stageIntro{display:block!important}
         .aiBadge{margin-bottom:12px}
         .vibeButtons{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))}
