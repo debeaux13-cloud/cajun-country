@@ -251,6 +251,9 @@ export default async function handler(req,res){
       if(existing.state==='submitted')return res.status(200).json({...previewClaimResponse(existing.claim),duplicate:true});
       return res.status(202).json({ok:true,pending:true,mcsJobId:existing.claim.mcsJobId||'',status:'SUBMITTING'});
     }
+    const reservation=await reservePreviewClaim({id:requestId,requestHash,mcsJobId,token:blobToken});
+    if(reservation.state==='submitted')return res.status(200).json({...previewClaimResponse(reservation.claim),duplicate:true});
+    if(reservation.state==='pending')return res.status(202).json({ok:true,pending:true,mcsJobId:reservation.claim.mcsJobId||'',status:'SUBMITTING'});
     const match=String(req.body.image).match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/i);
     if(!match)throw new Error('Photo must be a JPEG, PNG, or WebP image');
     const encoded=match[2].replace(/\s+/g,'');
@@ -270,9 +273,6 @@ export default async function handler(req,res){
     const screenplay=lockScreenplayIdentity(compiled,subjectIdentity);
     await store(mcsJobId,'reference',image,imageType);
     await store(mcsJobId,'story-plan',Buffer.from(JSON.stringify({creativeMode,storyBrief,sourceLedger,originalIdea,plan:editedStory,moods,selectedVibe:moods[0],screenplay,subjectIdentity})),'application/json');
-    const reservation=await reservePreviewClaim({id:requestId,requestHash,mcsJobId,token:blobToken});
-    if(reservation.state==='submitted')return res.status(200).json({...previewClaimResponse(reservation.claim),duplicate:true});
-    if(reservation.state==='pending')return res.status(202).json({ok:true,pending:true,mcsJobId:reservation.claim.mcsJobId||'',status:'SUBMITTING'});
     let dispatched;
     try{
       if(process.env.VERCEL_ENV==='preview'){
