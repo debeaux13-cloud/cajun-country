@@ -27,7 +27,7 @@ async function loadCron({claim,workerJob}){
     if(url.includes('/run'))return response(200,{id:'replacement-job',status:'IN_QUEUE'});
     if(url.includes('/cancel/'))return response(200,{});
     throw new Error('unexpected fetch '+url);
-  },blob,runpodModule:{runpod:()=>({key:'key',base:'https://worker.test'})},recovery:{ORDER_RECOVERY_STALE_MS:20*60*1000,orderRecoveryReason:(job,latest,at=Date.now(),http=200)=>{if(http===404)return'provider_missing';if(String(job?.output?.status||'').toLowerCase()==='manual_review')return'';if(['FAILED','CANCELLED','TIMED_OUT'].includes(String(job?.status||'').toUpperCase()))return'terminal_failed';return String(job?.status||'').toUpperCase()==='IN_PROGRESS'&&Number(job.executionTime)>20*60*1000?'stuck_in_progress':'';}}};
+  },blob,runpodModule:{runpod:()=>({key:'key',base:'https://worker.test'})},recovery:{ORDER_RECOVERY_STALE_MS:20*60*1000,orderRecoveryReason:(job,latest,at=Date.now(),http=200)=>{if(http===404)return'provider_missing';if(String(job?.output?.status||'').toLowerCase()==='manual_review')return'worker_manual_review';if(['FAILED','CANCELLED','TIMED_OUT'].includes(String(job?.status||'').toUpperCase()))return'terminal_failed';return String(job?.status||'').toUpperCase()==='IN_PROGRESS'&&Number(job.executionTime)>20*60*1000?'stuck_in_progress':'';}}};
   vm.runInNewContext(source,context,{filename:'order-recovery.js'});
   return{handler:context.module.exports,calls,writes,claim};
 }

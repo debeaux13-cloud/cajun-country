@@ -15,9 +15,9 @@ function loadRecoveryReason(){
   return context.module.exports;
 }
 
-test('manual_review is non-retryable',async()=>{
+test('preserves shared paid-order manual-review recovery reason',async()=>{
   const api=loadRecoveryReason();
-  assert.equal(api.orderRecoveryReason({status:'COMPLETED',output:{status:'manual_review'}},0),'');
+  assert.equal(api.orderRecoveryReason({status:'COMPLETED',output:{status:'manual_review'}},0),'worker_manual_review');
 });
 
 test('recovers hard failures and silent stalls but leaves healthy jobs alone',async()=>{

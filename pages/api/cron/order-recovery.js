@@ -113,14 +113,14 @@ async function exhaustPreview(pathname,claim,reason,token){
     ...claim,
     status:'failed',
     runpodStatus:'FAILED',
-    failureCode:'preview_stopped',
-    failureReason:reason||claim.lastRecoveryReason||'preview_stopped',
-    failureMessage:'The preview stopped before completion. It was not automatically retried, so no additional provider credits were used.',
+    failureCode:'recovery_exhausted',
+    failureReason:reason||claim.lastRecoveryReason||'recovery_limit_reached',
+    failureMessage:'The preview could not be completed after three automatic recovery attempts.',
     recoveryExhaustedAt:claim.recoveryExhaustedAt||new Date().toISOString(),
     updatedAt:new Date().toISOString()
   };
   await savePreviewClaim(pathname,failed,token);
-  console.error('Preview stopped without automatic retry',{
+  console.error('Automatic preview recovery exhausted',{
     previewId:claim.mcsJobId,
     attempts:Number(claim.recoveryAttempts||0),
     reason:failed.failureReason
