@@ -43,6 +43,6 @@ export default async function handler(req,res){if(!auth(req))return res.status(4
   const update={...body,scene:Number.isFinite(scene)?scene:0,updatedAt:new Date().toISOString()};
   const path=`mcs/jobs/${id}/progress-${update.scene||0}.json`;
   await put(path,Buffer.from(JSON.stringify(update)),{access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'});
-  console.log('[preview-scene]',JSON.stringify({id,stage:update.stage||'',status:update.status||'',scene:update.scene||0,provider:update.provider||'',providerJobId:update.providerJobId||''}));
+  console.log('[preview-scene]',JSON.stringify({id,stage:update.stage||'',status:update.status||'',scene:update.scene||0,provider:update.provider||'',providerJobId:update.providerJobId||'',error:String(update.error||'').slice(0,1200)||null}));
   return res.status(200).json({ok:true,id,...update});
 }return res.status(405).json({error:'Method not allowed'})}

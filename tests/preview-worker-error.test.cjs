@@ -1,0 +1,9 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const test=require('node:test');
+const callback=fs.readFileSync(path.join(__dirname,'..','pages','api','internal','preview-pipeline','[id].js'),'utf8');
+const progress=fs.readFileSync(path.join(__dirname,'..','pages','api','preview-progress.js'),'utf8');
+const preview=fs.readFileSync(path.join(__dirname,'..','pages','preview.js'),'utf8');
+test('worker callback logs a bounded failure reason',()=>{assert.match(callback,/error:String\(update\.error\|\|''\)\.slice\(0,1200\)\|\|null/);});
+test('progress and customer UI preserve a bounded worker failure reason',()=>{assert.match(progress,/String\(global\?\.error\|\|'Your preview stopped before it finished\.'/);assert.match(preview,/job\?\.error\|\|'Your story is saved\. We recorded the worker error/);});
