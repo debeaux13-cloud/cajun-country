@@ -107,7 +107,7 @@ export default function Preview(){
 
   return <main className='page'>
     <div className='shell'>
-      <a href='/create' className='back'>← Back to story</a>
+      <div className='topNav'><a href='/create' className='back'>← Back to story</a><a href='/my-orders' className='ordersLink'>My movies</a></div>
       <section className='hero'>
         <div className='eyebrow'>{done?'PREVIEW READY':failed?'NEEDS ATTENTION':'MOVIE IN PRODUCTION'}</div>
         <h1>{done?'Press play.':'Your story is coming alive.'}</h1>
@@ -131,7 +131,7 @@ export default function Preview(){
         {failed&&<div className='errorCard'>
           <strong>This preview stopped before it finished.</strong>
           <p>Your story is saved. Go back and try the preview again.</p>
-          <a href='/create' className='actionLink'>Return to my story</a>
+          <div className='errorActions'><a href='/create' className='actionLink'>Return to my story</a><a href='/my-orders' className='ordersTextLink'>See saved movies</a></div>
         </div>}
 
         {done&&<video src={videoUrl} controls autoPlay playsInline className='video'/>}
@@ -153,7 +153,7 @@ export default function Preview(){
       *{box-sizing:border-box}
       .page{min-height:100vh;background:linear-gradient(145deg,#fff8f3 0%,#f8e9fa 52%,#f2eaff 100%);color:#21132b;font-family:Arial,sans-serif;padding:18px 14px 60px}
       .shell{max-width:900px;margin:0 auto}
-      .back{display:inline-block;color:#6820a0;font-weight:800;text-decoration:none;margin:8px 4px 18px}
+      .topNav{display:flex;justify-content:space-between;align-items:center;gap:16px;margin:8px 4px 18px}.back,.ordersLink{display:inline-block;color:#6820a0;font-weight:800;text-decoration:none}.ordersLink{border:1px solid #cdaee1;border-radius:999px;padding:9px 14px}
       .hero{background:rgba(255,255,255,.92);border:1px solid #eadced;border-radius:28px;padding:clamp(24px,5vw,56px);box-shadow:0 24px 70px rgba(61,22,78,.12);overflow:hidden}
       .eyebrow{color:#862bc1;font-weight:900;letter-spacing:.16em;font-size:13px}
       h1{font-family:Georgia,serif;font-size:clamp(42px,8vw,76px);line-height:.96;margin:14px 0 18px;max-width:760px}
@@ -175,7 +175,7 @@ export default function Preview(){
       .finishCard p,.errorCard p{color:#685b6d;line-height:1.5}
       .price{font-size:44px;font-weight:900;margin:10px 0}
       button,.actionLink{display:inline-block;border:0;border-radius:999px;padding:16px 24px;background:linear-gradient(90deg,#fb5578,#ae30bf);color:white;font-size:17px;font-weight:900;text-decoration:none;cursor:pointer}
-      button:disabled{opacity:.6}
+      .errorActions{display:flex;align-items:center;gap:18px;flex-wrap:wrap}.ordersTextLink{font-weight:900;color:#6820a0}button:disabled{opacity:.6}
       @keyframes spin{to{transform:rotate(360deg)}}
       @keyframes travel{0%{transform:translateX(-110%)}50%{transform:translateX(120%)}100%{transform:translateX(-110%)}}
       @keyframes pulse{50%{opacity:.35}}
