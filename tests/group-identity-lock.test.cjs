@@ -29,6 +29,7 @@ async function loadIdentityLocker(){
       previewClaimResponse:()=>({}),
       previewRequestHash:()=>'',
       reservePreviewClaim:async()=>({}),
+      retryFailedPreviewClaim:async()=>({}),
       updatePreviewClaim:async()=>({})
     });
     if(specifier==='../../lib/photo-entitlement')return synthetic({
