@@ -12,6 +12,7 @@ function loadHandler({claim,statusCode=200,statusPayload={},storedMovie=false}){
     .replace("import{head}from'@vercel/blob';","const {head}=blob;")
     .replace("import{runpod}from'./_runpod';","const {runpod}=runpodModule;")
     .replace("import{getPreviewClaimByMcsJobId}from'../../lib/preview-guard';","const {getPreviewClaimByMcsJobId}=claimModule;")
+    .replace("import{ensureSavedPreview}from'../../lib/saved-previews';","const {ensureSavedPreview}=savedPreviewModule;")
     .replace('export default async function handler','async function handler')+'\nmodule.exports=handler;';
   const calls=[];
   const blob={head:async()=>{if(!storedMovie)throw new Error('missing');return{contentType:'video/mp4',size:524288};}};
@@ -19,7 +20,7 @@ function loadHandler({claim,statusCode=200,statusPayload={},storedMovie=false}){
     calls.push({url,options});
     if(url.includes('/status/'))return response(statusCode,statusPayload);
     throw new Error('only status calls are allowed');
-  },runpodModule:{runpod:()=>({key:'worker-key',base:'https://worker.test'})},claimModule:{getPreviewClaimByMcsJobId:async id=>{assert.equal(id,MCS_ID);return claim;}}};
+  },runpodModule:{runpod:()=>({key:'worker-key',base:'https://worker.test'})},claimModule:{getPreviewClaimByMcsJobId:async id=>{assert.equal(id,MCS_ID);return claim;}},savedPreviewModule:{ensureSavedPreview:async()=>null}};
   vm.runInNewContext(source,context,{filename});
   return{handler:context.module.exports,calls};
 }

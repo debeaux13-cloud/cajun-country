@@ -196,7 +196,7 @@ export default function Create(){
       try{response=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({previewEntitlement,creativeMode:selectedDraft.creativeMode,storyBrief:selectedDraft.storyBrief,sourceLedger:selectedDraft.sourceLedger,originalIdea:selectedDraft.originalIdea,plan:selectedDraft.plan,image,moods:selectedDraft.moods})})}catch{
         const recovered=await recoverAcceptedPreview();
         const previewUrl='/preview?jobId='+encodeURIComponent(recovered.jobId)+'&mcsJobId='+encodeURIComponent(recovered.mcsJobId);
-        savePreview({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()});
+        savePreview({url:previewUrl,mcsJobId:recovered.mcsJobId,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()});
         location.href=previewUrl;
         return;
       }
@@ -204,7 +204,7 @@ export default function Create(){
       if(!response.ok)throw new Error(result.error||'Preview failed');
       if(response.status===202||!result.jobId)result=await recoverAcceptedPreview();
       const previewUrl='/preview?jobId='+encodeURIComponent(result.jobId)+'&mcsJobId='+encodeURIComponent(result.mcsJobId);
-      savePreview({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()});
+      savePreview({url:previewUrl,mcsJobId:result.mcsJobId,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()});
       location.href=previewUrl;
     }catch(error){previewRequest.current=false;setStatus(error.message);setBusy(false)}
   }
