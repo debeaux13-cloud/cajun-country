@@ -43,14 +43,10 @@ def handler(event):
         x=requests.patch(job_url,headers=auth_headers("application/json"),json=b,timeout=30); x.raise_for_status(); return x.json()
 
     def upload(kind,path,scene=0,content_type="application/octet-stream"):
-        data=Path(path).read_bytes(); ticket_url=f"{callback}/api/internal/pipeline/jobs/{job_id}/upload-ticket"
-        t=requests.post(ticket_url,headers=auth_headers("application/json"),json={"kind":kind,"scene":scene or "","contentType":content_type,"size":len(data)},timeout=30); t.raise_for_status(); info=t.json()
-        if info.get("mode")!="server": raise RuntimeError(f"Blob ticket mode invalid: {info}")
-        pathname=str(info["pathname"]); api=str(info["apiUrl"]).rstrip("/")+"/?pathname="+requests.utils.quote(pathname,safe="")
-        store=str(info["storeId"]); token=str(info["token"])
-        headers={"authorization":f"Bearer {token}","x-vercel-blob-store-id":store,"x-api-version":"12","x-api-blob-request-id":f"{store}:{int(time.time()*1000)}:{uuid.uuid4().hex[:12]}","x-api-blob-request-attempt":"0","x-vercel-blob-access":"private","x-content-type":content_type,"x-add-random-suffix":"0","x-allow-overwrite":"1"}
-        sent=requests.put(api,headers=headers,data=data,timeout=600)
-        if not sent.ok: raise RuntimeError(f"Blob upload failed {sent.status_code}: {sent.text[:600]}")
+        data=Path(path).read_bytes()
+        asset_url=f"{job['assets']['upload']}?kind={requests.utils.quote(str(kind),safe='')}"+(f"&scene={int(scene)}" if scene else "")
+        sent=requests.put(asset_url,headers=auth_headers(content_type),data=data,timeout=600)
+        if not sent.ok: raise RuntimeError(f"Blob artifact upload failed {sent.status_code}: {sent.text[:600]}")
 
     def download(kind,dest,scene=0):
         url=f"{job['assets']['previewScene']}?kind={kind}"+(f"&scene={scene}" if scene else "")

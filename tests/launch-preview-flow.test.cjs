@@ -26,5 +26,7 @@ test('browser token and upload-ticket implementations are absent',()=>{
  const asset=read('pages/api/internal/preview-pipeline/[id]/asset.js');
  assert.doesNotMatch(asset,/token,storeId|apiUrl/);
  assert.equal(fs.existsSync(path.join(root,'pages/api/internal/preview-pipeline/[id]/upload-ticket.js')),false);
+ assert.equal(fs.existsSync(path.join(root,'pages/api/internal/pipeline/jobs/[id]/upload-ticket.js')),false);
+ for(const worker of ['worker/handler.py','worker/handler_v15.py'])assert.doesNotMatch(read(worker),/upload-ticket|x-vercel-blob-store-id|BLOB_READ_WRITE_TOKEN/);
  assert.match(asset,/if\(!auth\(req\)\)return res\.status\(401\)/);
 });
