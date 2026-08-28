@@ -98,8 +98,9 @@ export default function Preview(){
   }
 
   const status=String(job?.status||'').toUpperCase();
-  const completed=status==='COMPLETED';
-  const failed=status==='FAILED'||status==='CANCELLED'||status==='MANUAL_REVIEW';
+  const storedPreviewReady=production?.status==='ready'||production?.stage==='ready';
+  const completed=status==='COMPLETED'||storedPreviewReady;
+  const failed=!storedPreviewReady&&(status==='FAILED'||status==='CANCELLED'||status==='MANUAL_REVIEW');
   const working=!completed&&!failed;
   const videoUrl=completed&&mcsJobId?'/api/preview-media?id='+encodeURIComponent(mcsJobId):job?.videoUrl||null;
   const done=completed&&videoUrl;
