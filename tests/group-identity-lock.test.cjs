@@ -20,6 +20,7 @@ async function loadIdentityLocker(){
       MAX_REFERENCE_SUBJECTS:12,
       normalizeSubjects:identity=>(identity.subjects||[]).slice(0,12).map((subject,index)=>({...subject,subjectId:`S${index+1}`}))
     });
+    if(specifier==='../../lib/preview-worker-origin')return synthetic({previewCallbackBase:()=>'',previewWorkerEnvironment:()=>false});
     if(specifier==='../../lib/preview-guard')return synthetic({
       classifyPreviewClaim:()=>({}),
       enforceOfficialPreviewOrigin:()=>{},
