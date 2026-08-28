@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import {useRouter} from 'next/router';
 
-const terminalStatuses=['COMPLETED','FAILED','CANCELLED'];
+const terminalStatuses=['COMPLETED','FAILED','CANCELLED','MANUAL_REVIEW'];
 
 function clock(total){
   const seconds=Math.max(0,Math.floor(total));
@@ -12,6 +12,7 @@ export default function Preview(){
   const router=useRouter();
   const {jobId,mcsJobId}=router.query;
   const [job,setJob]=useState(null);
+  const [currentJobId,setCurrentJobId]=useState(jobId||null);
   const [message,setMessage]=useState('Starting your moving preview…');
   const [paying,setPaying]=useState(false);
   const [elapsed,setElapsed]=useState(0);
@@ -33,20 +34,26 @@ export default function Preview(){
   },[jobId]);
 
   useEffect(()=>{
-    if(!jobId)return;
+    if(!jobId&&!mcsJobId)return;
     let stopped=false;
     let timer;
     async function check(){
       try{
-        const r=await fetch('/api/job?jobId='+encodeURIComponent(jobId),{cache:'no-store'});
+        const requestedJobId=currentJobId||jobId||'';
+        const r=await fetch('/api/job?jobId='+encodeURIComponent(requestedJobId)+'&mcsJobId='+encodeURIComponent(mcsJobId||''),{cache:'no-store'});
         const j=await r.json();
         if(stopped)return;
         if(!r.ok)throw new Error(j.error||'Status check failed');
         setJob(j);
+        const nextJobId=String(j.resolvedJobId||'').trim();
+        if(nextJobId&&nextJobId!==currentJobId){
+          setCurrentJobId(nextJobId);
+          if(mcsJobId&&nextJobId!==jobId)router.replace('/preview?jobId='+encodeURIComponent(nextJobId)+'&mcsJobId='+encodeURIComponent(mcsJobId),undefined,{shallow:true});
+        }
         setCheckedAt(new Date());
         const s=String(j.status||'').toUpperCase();
         if(s==='COMPLETED')setMessage('Your 60-second preview is ready.');
-        else if(s==='FAILED'||s==='CANCELLED')setMessage(j.error||'We could not finish this preview. Please return to your story and try again.');
+        else if(s==='FAILED'||s==='CANCELLED'||s==='MANUAL_REVIEW')setMessage(j.error||'We could not finish this preview. Please return to your story and try again.');
         else if(s==='IN_PROGRESS')setMessage('Your characters are moving — your preview is rendering.');
         else setMessage('Your preview is in line and will begin automatically.');
         if(!terminalStatuses.includes(s))timer=setTimeout(check,3000);
@@ -59,7 +66,7 @@ export default function Preview(){
     }
     check();
     return()=>{stopped=true;clearTimeout(timer)};
-  },[jobId]);
+  },[jobId,mcsJobId,currentJobId,router]);
 
   useEffect(()=>{
     if(!mcsJobId)return;
@@ -71,7 +78,7 @@ export default function Preview(){
         const next=await response.json();
         if(!stopped&&response.ok){
           setProduction(next);
-          if(next.message&&String(job?.status||'').toUpperCase()!=='COMPLETED')setMessage(next.message);
+          if(next.message&&!['COMPLETED','MANUAL_REVIEW'].includes(String(job?.status||'').toUpperCase()))setMessage(next.message);
         }
       }catch{}
       if(!stopped)timer=setTimeout(checkProduction,3000);
@@ -83,7 +90,7 @@ export default function Preview(){
   async function checkout(){
     setPaying(true);
     try{
-      const r=await fetch('/api/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jobId,mcsJobId})});
+      const r=await fetch('/api/checkout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jobId:currentJobId||jobId,mcsJobId})});
       const j=await r.json();
       if(!r.ok)throw new Error(j.error||'Checkout failed');
       location.href=j.url;
@@ -92,7 +99,7 @@ export default function Preview(){
 
   const status=String(job?.status||'').toUpperCase();
   const completed=status==='COMPLETED';
-  const failed=status==='FAILED'||status==='CANCELLED';
+  const failed=status==='FAILED'||status==='CANCELLED'||status==='MANUAL_REVIEW';
   const working=!completed&&!failed;
   const videoUrl=completed&&mcsJobId?'/api/preview-media?id='+encodeURIComponent(mcsJobId):job?.videoUrl||null;
   const done=completed&&videoUrl;
