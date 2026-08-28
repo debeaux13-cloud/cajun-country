@@ -98,7 +98,7 @@ export default function Preview(){
   }
 
   const status=String(job?.status||'').toUpperCase();
-  const storedPreviewReady=production?.status==='ready'||production?.stage==='ready';
+  const storedPreviewReady=job?.storedPreviewReady===true;
   const completed=status==='COMPLETED'||storedPreviewReady;
   const failed=!storedPreviewReady&&(status==='FAILED'||status==='CANCELLED'||status==='MANUAL_REVIEW');
   const working=!completed&&!failed;
