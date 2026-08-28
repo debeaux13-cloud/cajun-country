@@ -4,6 +4,7 @@ import {useRouter} from 'next/router';
 const ORDER_KEY='mcs-latest-checkout-session';
 const ORDER_REF_KEY='mcs-latest-order-reference';
 const PREVIEW_KEY='mcs-latest-preview';
+const PREVIEW_HISTORY_KEY='mcs-preview-history';
 
 function label(state){
   if(state==='ready')return 'Ready to watch';
@@ -17,7 +18,7 @@ export default function MyOrders(){
   const router=useRouter();
   const[sessionId,setSessionId]=useState('');
   const[orderId,setOrderId]=useState('');
-  const[preview,setPreview]=useState(null);
+  const[previews,setPreviews]=useState([]);
   const[order,setOrder]=useState(null);
   const[error,setError]=useState('');
   const[lastChecked,setLastChecked]=useState('');
@@ -30,7 +31,12 @@ export default function MyOrders(){
     const orderRef=String(queryOrder||window.localStorage.getItem(ORDER_REF_KEY)||'').trim();
     try{
       const savedPreview=JSON.parse(window.localStorage.getItem(PREVIEW_KEY)||'null');
-      if(savedPreview?.url&&String(savedPreview.url).startsWith('/preview?'))setPreview(savedPreview);
+      const savedHistory=JSON.parse(window.localStorage.getItem(PREVIEW_HISTORY_KEY)||'[]');
+      const history=Array.isArray(savedHistory)?savedHistory:[];
+      const previews=[savedPreview,...history]
+        .filter(item=>item?.url&&String(item.url).startsWith('/preview?'))
+        .filter((item,index,items)=>items.findIndex(candidate=>candidate.url===item.url)===index);
+      setPreviews(previews);
     }catch{}
     if(id){
       setSessionId(id);
@@ -72,13 +78,13 @@ export default function MyOrders(){
     <div style={{maxWidth:900,margin:'0 auto',padding:24}}>
       <a href='/' style={{color:'#24152e'}}>← Main Character Studios by Tiffani</a>
       <h1 style={{fontFamily:'Georgia,serif',fontSize:'clamp(32px,7vw,52px)',marginBottom:8}}>My Orders</h1>
-      {preview&&<section style={{marginTop:24,background:'#fff',border:'2px solid #d83e9f',borderRadius:22,padding:24,boxShadow:'0 14px 35px rgba(94,32,181,.12)'}}>
-        <small style={{letterSpacing:1.5,fontWeight:900,color:'#7b2cff'}}>FREE MOVIE PREVIEW</small>
-        <h2 style={{fontSize:'clamp(25px,6vw,38px)',margin:'10px 0'}}>{preview.title||'Your free movie preview'}</h2>
-        <p style={{fontSize:18,lineHeight:1.55}}>Watch your preview, check its progress, or return to it anytime on this device.</p>
-        <a href={preview.url} style={{display:'inline-block',marginTop:8,padding:'15px 22px',borderRadius:999,background:'linear-gradient(90deg,#ff4f78,#922bd1)',color:'#fff',fontWeight:900,textDecoration:'none',fontSize:18}}>Open my preview →</a>
+      {previews.length>0&&<section style={{marginTop:24,background:'#fff',border:'2px solid #d83e9f',borderRadius:22,padding:24,boxShadow:'0 14px 35px rgba(94,32,181,.12)'}}>
+        <small style={{letterSpacing:1.5,fontWeight:900,color:'#7b2cff'}}>SAVED MOVIE PREVIEWS</small>
+        <h2 style={{fontSize:'clamp(25px,6vw,38px)',margin:'10px 0'}}>Your saved previews</h2>
+        <p style={{fontSize:18,lineHeight:1.55}}>Return to any preview saved on this device.</p>
+        <div style={{display:'grid',gap:12,marginTop:18}}>{previews.map((preview,index)=><div key={preview.url} style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'center',padding:16,border:'1px solid #eadced',borderRadius:16,flexWrap:'wrap'}}><div><strong>{preview.title||'Your free movie preview'}</strong><div style={{fontSize:14,color:'#6d6073',marginTop:4}}>{index===0?'Most recent preview':'Saved preview'}</div></div><a href={preview.url} style={{padding:'11px 16px',borderRadius:999,background:'linear-gradient(90deg,#ff4f78,#922bd1)',color:'#fff',fontWeight:900,textDecoration:'none'}}>Open preview →</a></div>)}</div>
       </section>}
-      {!sessionId&&!preview&&<section style={{marginTop:24,background:'#fff',border:'1px solid #e6d8e8',borderRadius:22,padding:24}}><h2>Your movies live here.</h2><p>Start a free preview or open the confirmation link from checkout on this device. Your latest movie will appear here automatically.</p><a href='/create' style={{fontWeight:900,color:'#6d24c7'}}>Create my movie →</a></section>}
+      {!sessionId&&!previews.length&&<section style={{marginTop:24,background:'#fff',border:'1px solid #e6d8e8',borderRadius:22,padding:24}}><h2>Your movies live here.</h2><p>Start a free preview or open the confirmation link from checkout on this device. Your latest movie will appear here automatically.</p><a href='/create' style={{fontWeight:900,color:'#6d24c7'}}>Create my movie →</a></section>}
       {sessionId&&<section style={{marginTop:24,background:'#fff',border:'1px solid #e6d8e8',borderRadius:22,padding:24}}>
         <div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'center',flexWrap:'wrap'}}>
           <div><small style={{letterSpacing:1.5,fontWeight:900,color:'#7b2cff'}}>3-MINUTE PERSONALIZED MOVIE</small><h2 style={{margin:'8px 0'}}>{order?.state==='ready'?'Your movie is ready':order?.state==='rendering'?'Your movie is being made':'Payment received'}</h2></div>

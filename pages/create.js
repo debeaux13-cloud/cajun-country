@@ -16,6 +16,17 @@ function canvasJpeg(canvas,quality){return new Promise((resolve,reject)=>canvas.
 function blobDataUrl(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('The prepared photo could not be read.'));reader.readAsDataURL(blob)})}
 function loadBrowserImage(file){return new Promise((resolve,reject)=>{const url=URL.createObjectURL(file);const image=new Image();image.onload=()=>resolve({image,url});image.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('That photo could not be opened. Try a JPEG, PNG, or WebP image.'))};image.src=url})}
 const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
+const PREVIEW_KEY='mcs-latest-preview';
+const PREVIEW_HISTORY_KEY='mcs-preview-history';
+function savePreview(preview){
+  try{
+    const previous=JSON.parse(window.localStorage.getItem(PREVIEW_HISTORY_KEY)||'[]');
+    const history=Array.isArray(previous)?previous:[];
+    const next=[preview,...history.filter(item=>item?.url!==preview.url)].slice(0,12);
+    window.localStorage.setItem(PREVIEW_KEY,JSON.stringify(preview));
+    window.localStorage.setItem(PREVIEW_HISTORY_KEY,JSON.stringify(next));
+  }catch{}
+}
 
 async function preparePhoto(file){
   if(!ACCEPTED_PHOTO_TYPES.has(file.type))throw new Error('Please choose a JPEG, PNG, WebP, HEIC, or HEIF photo.');
@@ -185,7 +196,7 @@ export default function Create(){
       try{response=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({previewEntitlement,creativeMode:selectedDraft.creativeMode,storyBrief:selectedDraft.storyBrief,sourceLedger:selectedDraft.sourceLedger,originalIdea:selectedDraft.originalIdea,plan:selectedDraft.plan,image,moods:selectedDraft.moods})})}catch{
         const recovered=await recoverAcceptedPreview();
         const previewUrl='/preview?jobId='+encodeURIComponent(recovered.jobId)+'&mcsJobId='+encodeURIComponent(recovered.mcsJobId);
-        window.localStorage.setItem('mcs-latest-preview',JSON.stringify({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()}));
+        savePreview({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()});
         location.href=previewUrl;
         return;
       }
@@ -193,7 +204,7 @@ export default function Create(){
       if(!response.ok)throw new Error(result.error||'Preview failed');
       if(response.status===202||!result.jobId)result=await recoverAcceptedPreview();
       const previewUrl='/preview?jobId='+encodeURIComponent(result.jobId)+'&mcsJobId='+encodeURIComponent(result.mcsJobId);
-      window.localStorage.setItem('mcs-latest-preview',JSON.stringify({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()}));
+      savePreview({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()});
       location.href=previewUrl;
     }catch(error){previewRequest.current=false;setStatus(error.message);setBusy(false)}
   }
