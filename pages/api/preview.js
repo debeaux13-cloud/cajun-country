@@ -6,7 +6,7 @@ import{submitPreviewJob}from'../../lib/preview-worker-orchestrator';
 import{compileStoryScreenplay}from'./_story-screenplay';
 import{MAX_REFERENCE_SUBJECTS,normalizeSubjects}from'../../lib/subject-contract';
 import{previewRequestIdFromEntitlement,verifyPhotoPreviewEntitlement}from'../../lib/photo-entitlement';
-import{classifyPreviewClaim,enforceOfficialPreviewOrigin,enforcePreviewRateLimit,getPreviewClaim,previewClaimResponse,previewRequestHash,reservePreviewClaim,updatePreviewClaim}from'../../lib/preview-guard';
+import{classifyPreviewClaim,enforceOfficialPreviewOrigin,enforcePreviewRateLimit,getPreviewClaim,previewClaimResponse,previewRequestHash,reservePreviewClaim,retryFailedPreviewClaim,updatePreviewClaim}from'../../lib/preview-guard';
 
 export const config={api:{bodyParser:{sizeLimit:'15mb'}}};
 
@@ -245,11 +245,21 @@ export default async function handler(req,res){
   const callbackBase='https://main-character-studios.vercel.app';
   try{
     await enforcePreviewRateLimit(req,requestId,blobToken,3);
+    let retryClaim=null;
     const existingClaim=await getPreviewClaim(requestId,blobToken);
     if(existingClaim){
-      const existing=classifyPreviewClaim(existingClaim,requestHash);
-      if(existing.state==='submitted')return res.status(200).json({...previewClaimResponse(existing.claim),duplicate:true});
-      return res.status(202).json({ok:true,pending:true,mcsJobId:existing.claim.mcsJobId||'',status:'SUBMITTING'});
+      try{
+        const existing=classifyPreviewClaim(existingClaim,requestHash);
+        if(existing.state==='submitted')return res.status(200).json({...previewClaimResponse(existing.claim),duplicate:true});
+        if(existing.state==='pending')return res.status(202).json({ok:true,pending:true,mcsJobId:existing.claim.mcsJobId||'',status:'SUBMITTING'});
+      }catch(error){
+        if(process.env.VERCEL_ENV!=='preview'||!existingClaim.jobId)throw error;
+        const prior=await fetch(base+'/status/'+encodeURIComponent(existingClaim.jobId),{headers:{Authorization:'Bearer '+key},signal:AbortSignal.timeout(15000)});
+        const priorPayload=await prior.json().catch(()=>({}));
+        const priorStatus=String(priorPayload?.status||'').toUpperCase();
+        if(!prior.ok||!['FAILED','CANCELLED','TIMED_OUT'].includes(priorStatus))throw error;
+        retryClaim=existingClaim;
+      }
     }
     const match=String(req.body.image).match(/^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=\s]+)$/i);
     if(!match)throw new Error('Photo must be a JPEG, PNG, or WebP image');
@@ -270,7 +280,9 @@ export default async function handler(req,res){
     const screenplay=lockScreenplayIdentity(compiled,subjectIdentity);
     await store(mcsJobId,'reference',image,imageType);
     await store(mcsJobId,'story-plan',Buffer.from(JSON.stringify({creativeMode,storyBrief,sourceLedger,originalIdea,plan:editedStory,moods,selectedVibe:moods[0],screenplay,subjectIdentity})),'application/json');
-    const reservation=await reservePreviewClaim({id:requestId,requestHash,mcsJobId,token:blobToken});
+    const reservation=retryClaim
+      ?await retryFailedPreviewClaim({id:requestId,claim:retryClaim,requestHash,mcsJobId,token:blobToken})
+      :await reservePreviewClaim({id:requestId,requestHash,mcsJobId,token:blobToken});
     if(reservation.state==='submitted')return res.status(200).json({...previewClaimResponse(reservation.claim),duplicate:true});
     if(reservation.state==='pending')return res.status(202).json({ok:true,pending:true,mcsJobId:reservation.claim.mcsJobId||'',status:'SUBMITTING'});
     let dispatched;

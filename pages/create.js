@@ -137,6 +137,7 @@ export default function Create(){
     setDraftsUsed(0);
     setImage('');
     setPhotoCheck(null);
+    setVibe(current=>current||'surprise me');
     setChatMessages([]);setChatInput('');setNeedsClarification(false);
     setCheckingPhoto(true);
     setStatus('Preparing a clear, upload-safe copy of your photo…');
@@ -150,7 +151,7 @@ export default function Create(){
         if(!response.ok&&result?.status!=='retry_required')throw new Error(result?.error||'Photo check failed');
         const resolved=['good','caution','retry_required'].includes(result?.status)?result:{status:'caution',reason:'The automatic photo check was inconclusive.',tip:'You can continue, or choose a clearer photo for the strongest likeness.',visiblePrincipalSubjectCount:0};
         setPhotoCheck(resolved);
-        setStatus(resolved.status==='retry_required'?'Please choose another photo before creating the story.':'Photo ready. Stage is looking at everyone in it now…');
+        setStatus(resolved.status==='retry_required'?'Please choose another photo before creating the story.':'Photo ready. Click Create My Story to continue, or choose a story type first.');
         if(resolved.status!=='retry_required')void talkToStage('',readyImage,[]);
       }catch{
         setPhotoCheck({status:'caution',reason:'The automatic photo check is temporarily unavailable, so we did not reject your picture.',tip:'You can still create and compare text stories. Upload the photo again before starting the protected moving preview.',visiblePrincipalSubjectCount:0,previewEntitlement:''});
