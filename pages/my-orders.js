@@ -98,7 +98,7 @@ export default function MyOrders(){
           <video src={order.movieUrl} controls playsInline style={{width:'100%',borderRadius:20,background:'#000'}}/>
           <p><a href={order.storybookUrl} target='_blank' rel='noreferrer' style={{fontWeight:900,color:'#6d24c7'}}>Open the matching storybook PDF →</a></p>
         </div>}
-        {order?.state==='needs_attention'&&<p style={{padding:14,borderRadius:14,background:'#fff2d6'}}>No additional payment is needed. Main Character Studios has the order and will review the render before delivery.</p>}
+        {order?.state==='needs_attention'&&<p style={{padding:14,borderRadius:14,background:'#fff2d6'}}>No additional payment is needed. We could not complete this movie automatically. Your payment is being reviewed before delivery or refund.</p>}
       </section>}
     </div>
   </main>;

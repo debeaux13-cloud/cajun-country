@@ -300,6 +300,10 @@ export default async function handler(req,res){
     try{
       const order=await readJson(blob.pathname,token);
       if(!order?.mcsJobId||!order?.stripeSessionId||!order?.runpodJobId)continue;
+      if(String(order.status||'').toLowerCase()==='failed'){
+        results.push({orderId:order.mcsJobId,action:'already_failed',customerState:String(order.customerState||'needs_review')});
+        continue;
+      }
       const createdAt=new Date(order.createdAt||0).getTime()||0;
       if(!createdAt||Date.now()-createdAt>ELIGIBLE_AGE_MS){results.push({orderId:order.mcsJobId,action:'outside_recovery_window'});continue}
       const attempts=Number(order.recoveryAttempts||0);
