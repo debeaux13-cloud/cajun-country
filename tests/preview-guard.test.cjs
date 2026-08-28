@@ -60,3 +60,9 @@ test('production preview submissions must come from the official create site',as
   assert.doesNotThrow(()=>guard.enforceOfficialPreviewOrigin({headers:{origin:'https://main-character-studios.vercel.app'}}));
   assert.throws(()=>guard.enforceOfficialPreviewOrigin({headers:{origin:'https://example.com'}}),/official Main Character Studios/i);
 });
+
+test('allows only a marked Preview retry reservation',async()=>{
+  const guard=await loadPreviewGuard();
+  assert.equal(guard.classifyPreviewClaim({requestHash:'x',status:'retrying'},'x').state,'reserved');
+  assert.throws(()=>guard.classifyPreviewClaim({requestHash:'x',status:'retrying'},'other'),/different story content/i);
+});
