@@ -26,6 +26,7 @@ function scenePercent(item){
 
 function messageFor(latest,complete,global){
   if(global?.stage==='ready'||global?.status==='ready')return'Your preview is ready.';
+  if(String(global?.status||'').toLowerCase()==='failed')return String(global?.error||'Your preview stopped before it finished.').slice(0,300);
   if(global?.stage==='assembling')return'All six scenes are finished. Adding sound and assembling your movie…';
   if(complete>0)return`Scene ${complete} of 6 finished. The remaining scenes are still rendering…`;
   const stage=String(latest?.stage||'').toLowerCase();

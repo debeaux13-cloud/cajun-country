@@ -130,7 +130,7 @@ export default function Preview(){
 
         {failed&&<div className='errorCard'>
           <strong>This preview stopped before it finished.</strong>
-          <p>Your story is saved. Go back and try the preview again.</p>
+          <p>{job?.error||'Your story is saved. We recorded the worker error for review.'}</p>
           <a href='/create' className='actionLink'>Return to my story</a>
         </div>}
 
