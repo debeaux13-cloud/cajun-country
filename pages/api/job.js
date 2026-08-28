@@ -11,17 +11,16 @@ export default async function handler(req,res){
   const requestedJobId=String(req.query?.jobId||'').trim();
   const mcsJobId=String(req.query?.mcsJobId||'').trim();
   if(!requestedJobId&&!mcsJobId)return res.status(400).json({error:'jobId or mcsJobId required'});
+  const token=process.env.BLOB_READ_WRITE_TOKEN||'';
+  if(mcsJobId&&!token)return res.status(503).json({error:'Preview storage is unavailable'});
   let claim=null;
   if(mcsJobId){
-    const token=process.env.BLOB_READ_WRITE_TOKEN||'';
-    if(!token)return res.status(503).json({error:'Preview storage is unavailable'});
     try{claim=await getPreviewClaimByMcsJobId(mcsJobId,token)}catch(error){return res.status(502).json({error:error.message})}
-    if(String(claim?.status||'').toLowerCase()==='manual_review'){
-      return res.status(200).json({ok:true,status:'MANUAL_REVIEW',providerStatus:'MANUAL_REVIEW',requestedJobId,resolvedJobId:String(claim.jobId||requestedJobId),jobIdChanged:requestedJobId!==String(claim.jobId||requestedJobId),error:claim.failureMessage||'This preview needs manual review.',output:{status:'manual_review'}});
-    }
   }
-  const storedPreview=await storedPreviewReady(mcsJobId,process.env.BLOB_READ_WRITE_TOKEN||'');
+  const storedPreview=await storedPreviewReady(mcsJobId,token);
   const effectiveJobId=String(claim?.jobId||requestedJobId).trim();
+  if(storedPreview)return res.status(200).json({ok:true,status:'COMPLETED',providerStatus:String(claim?.status||'').toLowerCase()==='manual_review'?'MANUAL_REVIEW':String(claim?.runpodStatus||'NOT_FOUND'),storedPreviewReady:true,requestedJobId,resolvedJobId:effectiveJobId,jobIdChanged:requestedJobId!==effectiveJobId,videoUrl:'/api/preview-media?id='+encodeURIComponent(mcsJobId),output:{status:'ready'}});
+  if(String(claim?.status||'').toLowerCase()==='manual_review')return res.status(200).json({ok:true,status:'MANUAL_REVIEW',providerStatus:'MANUAL_REVIEW',requestedJobId,resolvedJobId:effectiveJobId,jobIdChanged:requestedJobId!==effectiveJobId,error:claim.failureMessage||'This preview needs manual review.',output:{status:'manual_review'}});
   if(!effectiveJobId)return res.status(404).json({error:'Preview job not found',requestedJobId,resolvedJobId:'',jobIdChanged:false});
   const{key,base}=runpod();
   if(!key||!base)return res.status(503).json({error:'Movie worker configuration incomplete'});
