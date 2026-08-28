@@ -126,8 +126,9 @@ export default function Create(){
       setDrafts([draft]);
       setSelectedDraftIndex(0);
       setDraftsUsed(current=>Math.max(current,resolvedAttempt));
-      setStatus('Your story is ready. Change anything you want, then preview it.');
-    }catch(error){setStatus(error.message)}finally{stageRequest.current=false;setBusy(false)}
+      setStatus('Starting your free moving preview…');
+      await preview(draft);
+    }catch(error){setStatus(error.message);setBusy(false)}finally{stageRequest.current=false}
   }
 
   async function file(event){
@@ -160,10 +161,11 @@ export default function Create(){
     }catch(error){event.target.value='';setStatus(error.message)}finally{setCheckingPhoto(false)}
   }
 
-  async function preview(){
+  async function preview(createdStory){
     if(previewRequest.current)return;
+    const draft=createdStory||selectedDraft;
     if(!image){setStatus('Add one clear individual or group photo first.');return}
-    if(!selectedDraft?.plan){setStatus('Choose or create a Stage draft first.');return}
+    if(!draft?.plan){setStatus('Choose or create a Stage draft first.');return}
     const previewEntitlement=String(photoCheck?.previewEntitlement||'');
     if(!previewEntitlement){setStatus('Upload the photo again so we can prepare its protected one-preview pass. Your text drafts will stay on this page.');return}
     previewRequest.current=true;
@@ -182,10 +184,10 @@ export default function Create(){
     }
     try{
       let response;
-      try{response=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({previewEntitlement,creativeMode:selectedDraft.creativeMode,storyBrief:selectedDraft.storyBrief,sourceLedger:selectedDraft.sourceLedger,originalIdea:selectedDraft.originalIdea,plan:selectedDraft.plan,image,moods:selectedDraft.moods})})}catch{
+      try{response=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({previewEntitlement,creativeMode:draft.creativeMode,storyBrief:draft.storyBrief,sourceLedger:draft.sourceLedger,originalIdea:draft.originalIdea,plan:draft.plan,image,moods:draft.moods})})}catch{
         const recovered=await recoverAcceptedPreview();
         const previewUrl='/preview?jobId='+encodeURIComponent(recovered.jobId)+'&mcsJobId='+encodeURIComponent(recovered.mcsJobId);
-        window.localStorage.setItem('mcs-latest-preview',JSON.stringify({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()}));
+        window.localStorage.setItem('mcs-latest-preview',JSON.stringify({url:previewUrl,title:draft?.title||'Your free movie preview',createdAt:Date.now()}));
         location.href=previewUrl;
         return;
       }
@@ -193,7 +195,7 @@ export default function Create(){
       if(!response.ok)throw new Error(result.error||'Preview failed');
       if(response.status===202||!result.jobId)result=await recoverAcceptedPreview();
       const previewUrl='/preview?jobId='+encodeURIComponent(result.jobId)+'&mcsJobId='+encodeURIComponent(result.mcsJobId);
-      window.localStorage.setItem('mcs-latest-preview',JSON.stringify({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()}));
+      window.localStorage.setItem('mcs-latest-preview',JSON.stringify({url:previewUrl,title:draft?.title||'Your free movie preview',createdAt:Date.now()}));
       location.href=previewUrl;
     }catch(error){previewRequest.current=false;setStatus(error.message);setBusy(false)}
   }
@@ -242,13 +244,10 @@ export default function Create(){
               <h2>{selectedDraft.title||'Your Main Character Story'}</h2>
             </div>
           </div>
-          <p className='editHelp'>Read it, change anything you want directly in the box, then preview it. For example: “change the horse to a unicorn.”</p>
-          <textarea className='storyInput customerStory' disabled={busy} value={selectedDraft.storyBrief||selectedDraft.plan} onChange={event=>changeSelectedPlan(event.target.value)} style={{width:'100%',minHeight:280,padding:18,borderRadius:18,boxSizing:'border-box',fontSize:17}}/>
-          <div className='storyActions'>
-            {draftsUsed<3&&<button className='secondaryButton' disabled={busy} onClick={stage}>{busy?'Writing a different story…':'Make a different story'}</button>}
-            <button className='previewButton' disabled={busy||!photoCheck?.previewEntitlement} onClick={preview}>Preview My Movie Free →</button>
-          </div>
-          <p className='simplePreviewCopy'>Watch the first minute. Love it? Buy the full 3-minute movie and matching storybook PDF. Want a change? Edit this story before previewing.</p>
+          <p className='editHelp'>Your 18-scene story is saved. Its six-scene free moving preview is starting now.</p>
+          <textarea className='storyInput customerStory' disabled value={selectedDraft.storyBrief||selectedDraft.plan} readOnly style={{width:'100%',minHeight:280,padding:18,borderRadius:18,boxSizing:'border-box',fontSize:17}}/>
+          <div className='storyActions'><span className='previewStarting'>Starting your preview…</span></div>
+          <p className='simplePreviewCopy'>Watch the first minute. Love it? Buy the full 3-minute movie and matching storybook PDF.</p>
         </>}
       </section>
     </div>

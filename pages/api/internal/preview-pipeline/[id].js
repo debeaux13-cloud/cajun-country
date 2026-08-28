@@ -1,4 +1,5 @@
 import{head,put}from'@vercel/blob';
+import{previewCallbackBase,previewWorkerEnvironment}from'../../../../lib/preview-worker-origin';
 import{subjectContract}from'../../../../lib/subject-contract';
 function auth(req){const s=process.env.MCS_WORKER_SECRET||'';const h=req.headers.authorization||'';return !!s&&(h==='Bearer '+s||h===s)}
 async function loadStory(id){const token=process.env.BLOB_READ_WRITE_TOKEN;if(!token)throw new Error('Blob storage missing');const path=`mcs/jobs/${id}/story-plan.bin`;const meta=await head(path,{token});const r=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)throw new Error(`Story fetch failed ${r.status}`);const saved=JSON.parse(await r.text());if(!Array.isArray(saved?.screenplay?.scenes)||saved.screenplay.scenes.length!==18)throw new Error('Structured screenplay missing');return saved}
@@ -6,7 +7,8 @@ function previewScenes(saved){return saved.screenplay.scenes.slice(0,6).map((s,i
 const STORY_VIBES=new Set(['surprise me','funny','magical','adventure','heartwarming','mystery','kid-safe spooky']);
 function storyMoods(saved){const values=Array.isArray(saved?.moods)?saved.moods:[saved?.selectedVibe];const moods=values.map(value=>String(value||'').trim().toLowerCase()).filter(value=>STORY_VIBES.has(value));return[moods[0]||'surprise me']}
 async function contract(id){
-  const origin='https://main-character-studios.vercel.app';
+  const origin=previewWorkerEnvironment()?previewCallbackBase():'https://main-character-studios.vercel.app';
+  const previewAsset=`${origin}/api/internal/preview-pipeline/${id}/asset`;
   const paidAsset=`${origin}/api/internal/pipeline/jobs/${id}/asset`;
   const runway=process.env.Runway||process.env.RUNWAY_API_KEY||'';
   const eleven=process.env.ELEVENLABS_API_KEY||process.env.Elevenlabs_Secured_key||process.env.Elevenlabs_Secured_key_2||'';
@@ -28,7 +30,7 @@ async function contract(id){
     subjectIdentity:saved.subjectIdentity||null,
     existingManifest:{version:4,title,subtitle:'The opening minute',pages:scenes.map(s=>({sceneNumber:s.sceneNumber,text:s.narration})),scenes},
     existingProviderJobs:{},
-    assets:{reference:`${paidAsset}?kind=reference`,previewScene:paidAsset,upload:paidAsset,musicBed:`${paidAsset}?kind=music-bed`},
+    assets:{reference:`${previewWorkerEnvironment()?previewAsset:paidAsset}?kind=reference`,previewScene:previewWorkerEnvironment()?previewAsset:paidAsset,upload:previewWorkerEnvironment()?previewAsset:paidAsset,musicBed:`${previewWorkerEnvironment()?previewAsset:paidAsset}?kind=music-bed`},
     providers:{openaiApiKey:'',runwayApiKey:runway,elevenLabsApiKey:eleven,elevenLabsVoiceId:process.env.ELEVENLABS_VOICE_ID||'21m00Tcm4TlvDq8ikWAM',elevenLabsModelId:process.env.ELEVENLABS_MODEL_ID||'eleven_flash_v2_5'},
     contract:{scenes:6,previewScenes:6,secondsPerScene:10,previewSeconds:60,movieSeconds:60,fullMovieScenes:18,fullMovieSeconds:180,subjectCount:traits.subject_count,subjectType:traits.subject_type,musicVibe:selectedVibe,musicAssetKind:'music-bed',reusePreviewMusic:true,petRouting:'runway-gen4-turbo-only',animalPoseDetection:false}
   };
@@ -41,6 +43,6 @@ export default async function handler(req,res){if(!auth(req))return res.status(4
   const update={...body,scene:Number.isFinite(scene)?scene:0,updatedAt:new Date().toISOString()};
   const path=`mcs/jobs/${id}/progress-${update.scene||0}.json`;
   await put(path,Buffer.from(JSON.stringify(update)),{access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'});
-  console.log('[preview-scene]',JSON.stringify({id,stage:update.stage||'',status:update.status||'',scene:update.scene||0,provider:update.provider||'',providerJobId:update.providerJobId||''}));
+  console.log('[preview-scene]',JSON.stringify({requestId:String(update.requestId||''),jobId:id,stage:update.stage||'',status:update.status||'',attempt:Number(update.attempt||1),provider:update.provider||'',duration:Number(update.duration||0),error:String(update.error||'').slice(0,1200)||null}));
   return res.status(200).json({ok:true,id,...update});
 }return res.status(405).json({error:'Method not allowed'})}
