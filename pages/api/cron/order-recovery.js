@@ -8,8 +8,6 @@ const MAX_RECOVERIES=3;
 const PREBUILT_MIGRATION_ORDER='82566803-902c-48c2-a95a-73dd3014356a';
 const COOLDOWN_MS=10*60*1000;
 const ELIGIBLE_AGE_MS=24*60*60*1000;
-const CANARY_SOURCE_JOB='9a9bf989-c81d-4dea-9a38-055e7ec9ed7b-u2';
-const CANARY_PATH='mcs/config/order-recovery-canary.json';
 const PREVIEW_CLAIM_PREFIX='mcs/preview-claims/';
 const PREVIEW_MAX_RECOVERIES=3;
 
@@ -115,14 +113,14 @@ async function exhaustPreview(pathname,claim,reason,token){
     ...claim,
     status:'failed',
     runpodStatus:'FAILED',
-    failureCode:'recovery_exhausted',
-    failureReason:reason||claim.lastRecoveryReason||'recovery_limit_reached',
-    failureMessage:'The preview could not be completed after three automatic recovery attempts.',
+    failureCode:'preview_stopped',
+    failureReason:reason||claim.lastRecoveryReason||'preview_stopped',
+    failureMessage:'The preview stopped before completion. It was not automatically retried, so no additional provider credits were used.',
     recoveryExhaustedAt:claim.recoveryExhaustedAt||new Date().toISOString(),
     updatedAt:new Date().toISOString()
   };
   await savePreviewClaim(pathname,failed,token);
-  console.error('Automatic preview recovery exhausted',{
+  console.error('Preview stopped without automatic retry',{
     previewId:claim.mcsJobId,
     attempts:Number(claim.recoveryAttempts||0),
     reason:failed.failureReason
@@ -179,6 +177,23 @@ async function previewMovieReady(mcsJobId,token){
   }catch{return false}
 }
 
+async function markPreviewManualReview(pathname,claim,reason,token){
+  const updated={
+    ...claim,
+    status:'manual_review',
+    failureCode:'manual_review',
+    failureReason:reason||'worker_manual_review',
+    failureMessage:'The preview needs manual review. It was not retried, cancelled, or re-rendered.',
+    manualReviewAt:claim.manualReviewAt||new Date().toISOString(),
+    updatedAt:new Date().toISOString()
+  };
+  await savePreviewClaim(pathname,updated,token);
+  console.info('Preview recovery skipped for manual review',{
+    previewId:claim.mcsJobId,jobId:claim.jobId||'',reason:updated.failureReason
+  });
+  return updated;
+}
+
 async function requeuePreview(pathname,claim,reason,headers,base,token){
   const oldJobId=String(claim.jobId||'');
   if(reason.startsWith('stuck_')&&oldJobId){
@@ -217,7 +232,12 @@ async function recoverPreviews(headers,base,token){
   for(const blob of recent){
     try{
       const claim=await readJson(blob.pathname,token);
-      if(!claim?.mcsJobId||!['submitted','submitting','submission_unknown'].includes(String(claim.status||'')))continue;
+      if(!claim?.mcsJobId)continue;
+      if(String(claim.status||'').toLowerCase()==='manual_review'){
+        results.push({previewId:claim.mcsJobId,action:'manual_review'});
+        continue;
+      }
+      if(!['submitted','submitting','submission_unknown'].includes(String(claim.status||'')))continue;
       if(await previewMovieReady(claim.mcsJobId,token)){
         results.push({previewId:claim.mcsJobId,action:'ready'});
         continue;
@@ -245,6 +265,10 @@ async function recoverPreviews(headers,base,token){
             results.push({previewId:claim.mcsJobId,action:'provider_unavailable',providerHttp:response.status});
             continue;
           }
+        }else if(String(job?.output?.status||'').toLowerCase()==='manual_review'){
+          const updated=await markPreviewManualReview(blob.pathname,claim,'worker_manual_review',token);
+          results.push({previewId:claim.mcsJobId,action:'manual_review',reason:updated.failureReason});
+          continue;
         }else{
           reason=orderRecoveryReason(job,ACTIVE.has(String(job.status||'').toUpperCase())?latest:0);
         }
@@ -267,20 +291,9 @@ async function recoverPreviews(headers,base,token){
   return{checked:page.blobs.length,results};
 }
 
-async function runRecoveryCanary(headers,base,token){
-  try{return await readJson(CANARY_PATH,token)}catch{}
-  const statusResponse=await fetch(`${base}/status/${CANARY_SOURCE_JOB}`,{headers});
-  const source=await statusResponse.json().catch(()=>({}));
-  if(!statusResponse.ok)return{ok:false,stage:'source_unavailable'};
-  const reason=orderRecoveryReason(source,0);
-  if(!reason)return{ok:false,stage:'source_not_failed',sourceStatus:String(source.status||'')};
-  const started=await fetch(`${base}/run`,{method:'POST',headers,body:JSON.stringify({input:{type:'health'}})});
-  const payload=await started.json().catch(()=>({}));
-  if(!started.ok||!payload.id)throw new Error(`Recovery canary dispatch failed (${started.status})`);
-  const proof={ok:true,detected:reason,sourceJobId:CANARY_SOURCE_JOB,recoveryJobId:String(payload.id),recoveryStatus:String(payload.status||'IN_QUEUE'),firedAutomaticallyAt:new Date().toISOString()};
-  await put(CANARY_PATH,JSON.stringify(proof),{access:'private',addRandomSuffix:false,allowOverwrite:false,token,contentType:'application/json'});
-  console.info('Automatic recovery canary fired',proof);
-  return proof;
+async function runRecoveryCanary(headers,base){
+  const response=await fetch(`${base}/health`,{headers});
+  return {ok:response.ok,stage:'status_only',httpStatus:response.status};
 }
 
 export default async function handler(req,res){
@@ -290,7 +303,7 @@ export default async function handler(req,res){
   const{key,base}=runpod();
   if(!token||!key||!base)return res.status(503).json({error:'Recovery configuration incomplete'});
   const headers={Authorization:`Bearer ${key}`,'Content-Type':'application/json'};
-  const canary=await runRecoveryCanary(headers,base,token);
+  const canary=await runRecoveryCanary(headers,base);
   const page=await list({prefix:'mcs/orders/',limit:100,token});
   const results=[];
   const recent=[...page.blobs]

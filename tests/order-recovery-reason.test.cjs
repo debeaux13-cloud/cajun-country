@@ -4,22 +4,24 @@ const path=require('node:path');
 const test=require('node:test');
 const vm=require('node:vm');
 
-async function loadRecoveryReason(){
+function loadRecoveryReason(){
   const filename=path.join(__dirname,'..','lib','order-recovery-reason.js');
-  const context=vm.createContext({Date,Set});
-  const module=new vm.SourceTextModule(fs.readFileSync(filename,'utf8'),{context,identifier:filename});
-  await module.link(()=>{throw new Error('Recovery reason must not import external services')});
-  await module.evaluate();
-  return module.namespace;
+  const source=fs.readFileSync(filename,'utf8')
+    .replace('export const ORDER_RECOVERY_STALE_MS=', 'const ORDER_RECOVERY_STALE_MS=')
+    .replace('export function orderRecoveryReason', 'function orderRecoveryReason')
+    +'\nmodule.exports={ORDER_RECOVERY_STALE_MS,orderRecoveryReason};';
+  const context={module:{exports:{}},Date,Set,Math,Number,String};
+  vm.runInNewContext(source,context,{filename});
+  return context.module.exports;
 }
 
-test('automatically recovers a completed worker that requests manual review',async()=>{
-  const api=await loadRecoveryReason();
-  assert.equal(api.orderRecoveryReason({status:'COMPLETED',output:{status:'manual_review'}},0),'worker_manual_review');
+test('manual_review is non-retryable',async()=>{
+  const api=loadRecoveryReason();
+  assert.equal(api.orderRecoveryReason({status:'COMPLETED',output:{status:'manual_review'}},0),'');
 });
 
 test('recovers hard failures and silent stalls but leaves healthy jobs alone',async()=>{
-  const api=await loadRecoveryReason();
+  const api=loadRecoveryReason();
   const now=50*60*1000;
   assert.equal(api.orderRecoveryReason({status:'FAILED'},0,now),'terminal_failed');
   assert.equal(api.orderRecoveryReason({status:'IN_PROGRESS',executionTime:36*60*1000},0,now),'stuck_in_progress');
