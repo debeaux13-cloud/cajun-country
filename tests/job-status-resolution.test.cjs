@@ -43,11 +43,20 @@ test('stale browser job resolves to current claim job and queries only the new s
   assertNoPaidCalls(result.calls);
 });
 
-test('manual-review claim is terminal and does not contact RunPod or alter preview assets',async()=>{
+test('manual-review claim without a stored movie is terminal and does not contact RunPod',async()=>{
   const result=await request({claim:{mcsJobId:MCS_ID,jobId:'NEW_JOB',status:'manual_review',failureMessage:'Needs review'}});
   assert.equal(result.res.code,200);
   assert.equal(result.res.body.status,'MANUAL_REVIEW');
   assert.equal(result.res.body.resolvedJobId,'NEW_JOB');
+  assert.equal(result.calls.length,0);
+});
+
+test('manual-review claim with a stored movie remains completed without RunPod calls',async()=>{
+  const result=await request({claim:{mcsJobId:MCS_ID,jobId:'NEW_JOB',status:'manual_review'},storedMovie:true});
+  assert.equal(result.res.code,200);
+  assert.equal(result.res.body.status,'COMPLETED');
+  assert.equal(result.res.body.providerStatus,'MANUAL_REVIEW');
+  assert.equal(result.res.body.storedPreviewReady,true);
   assert.equal(result.calls.length,0);
 });
 
@@ -60,7 +69,7 @@ test('missing resolved job without a stored movie is terminal instead of returni
   assertNoPaidCalls(result.calls);
 });
 
-test('expired RunPod job with a stored preview movie stays completed',async()=>{
+test('expired RunPod job with a stored preview movie stays completed without rerunning work',async()=>{
   const result=await request({claim:{mcsJobId:MCS_ID,jobId:'NEW_JOB',status:'submitted'},statusCode:404,statusPayload:{error:'missing'},storedMovie:true});
   assert.equal(result.res.code,200);
   assert.equal(result.res.body.status,'COMPLETED');
