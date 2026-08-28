@@ -14,6 +14,7 @@ async function loadIdentityLocker(){
     if(specifier==='@vercel/blob')return synthetic({put:async()=>({})});
     if(specifier==='@vercel/oidc')return synthetic({getVercelOidcToken:async()=>''});
     if(specifier==='./_runpod')return synthetic({runpod:()=>({})});
+    if(specifier==='../../lib/preview-worker-orchestrator')return synthetic({submitPreviewJob:async()=>({})});
     if(specifier==='./_story-screenplay')return synthetic({compileStoryScreenplay:async()=>({})});
     if(specifier==='../../lib/subject-contract')return synthetic({
       MAX_REFERENCE_SUBJECTS:12,

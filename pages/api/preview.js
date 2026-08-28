@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import{put}from'@vercel/blob';
 import{getVercelOidcToken}from'@vercel/oidc';
 import{runpod}from'./_runpod';
+import{submitPreviewJob}from'../../lib/preview-worker-orchestrator';
 import{compileStoryScreenplay}from'./_story-screenplay';
 import{MAX_REFERENCE_SUBJECTS,normalizeSubjects}from'../../lib/subject-contract';
 import{previewRequestIdFromEntitlement,verifyPhotoPreviewEntitlement}from'../../lib/photo-entitlement';
@@ -229,6 +230,7 @@ export default async function handler(req,res){
   try{enforceOfficialPreviewOrigin(req)}catch(error){return res.status(403).json({error:error.message})}
   const{key,base}=runpod();
   if(!key||!base)return res.status(503).json({error:'RunPod configuration incomplete'});
+  if(process.env.VERCEL_ENV==='preview'&&(!process.env.MCS_WORKER_SECRET||!process.env.BLOB_READ_WRITE_TOKEN||!process.env.VERCEL_URL))return res.status(503).json({error:'Preview worker configuration incomplete'});
   const editedStory=String(req.body?.plan||'').trim();
   const creativeMode=req.body?.creativeMode==='make_for_me'?'make_for_me':'my_story';
   const originalIdea=typeof req.body?.originalIdea==='string'?req.body.originalIdea.trim():editedStory;
@@ -271,41 +273,23 @@ export default async function handler(req,res){
     const reservation=await reservePreviewClaim({id:requestId,requestHash,mcsJobId,token:blobToken});
     if(reservation.state==='submitted')return res.status(200).json({...previewClaimResponse(reservation.claim),duplicate:true});
     if(reservation.state==='pending')return res.status(202).json({ok:true,pending:true,mcsJobId:reservation.claim.mcsJobId||'',status:'SUBMITTING'});
-    let response;
+    let dispatched;
     try{
-      response=await fetch(base+'/run',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-        body:JSON.stringify({input:{
-          jobId:mcsJobId,
-          callbackBase,
-          mode:'preview',
-          workerSecret:process.env.MCS_WORKER_SECRET||'',
-          duration_seconds:60,
-          preview_scene_count:6,
-          total_scene_count:18,
-          full_duration_seconds:180
-        }})
-      });
+      if(process.env.VERCEL_ENV==='preview'){
+        dispatched=await submitPreviewJob({id:mcsJobId,idempotencyKey:requestHash});
+      }else{
+        const response=await fetch(base+'/run',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify({input:{jobId:mcsJobId,callbackBase:'https://main-character-studios.vercel.app',mode:'preview',workerSecret:process.env.MCS_WORKER_SECRET||'',duration_seconds:60,preview_scene_count:6,total_scene_count:18,full_duration_seconds:180}})});
+        const payload=await response.json().catch(()=>({}));
+        if(!response.ok||!payload?.id)throw new Error(payload?.error||payload?.message||'RunPod rejected preview');
+        dispatched={runpodJobId:String(payload.id),runpodStatus:String(payload.status||'')};
+      }
     }catch(error){
       await updatePreviewClaim(requestId,reservation.claim,blobToken,'submission_unknown',{error:String(error?.message||error).slice(0,300)});
       throw new Error('RunPod receipt was interrupted; this request is locked to prevent a duplicate render. Contact support before retrying.');
     }
-    let payload;
-    try{payload=await response.json()}catch{
-      await updatePreviewClaim(requestId,reservation.claim,blobToken,'submission_unknown',{error:'Unreadable provider receipt'});
-      throw new Error('RunPod returned an unreadable receipt; this request is locked to prevent a duplicate render. Contact support before retrying.');
-    }
-    if(!response.ok){
-      await updatePreviewClaim(requestId,reservation.claim,blobToken,'rejected',{error:String(payload?.error||payload?.message||'RunPod rejected preview').slice(0,300)});
-      throw new Error(payload?.error||payload?.message||'RunPod rejected preview');
-    }
-    const jobId=String(payload?.id||'').trim();
-    if(!jobId){
-      await updatePreviewClaim(requestId,reservation.claim,blobToken,'submission_unknown',{error:'Provider receipt contained no job ID'});
-      throw new Error('RunPod returned no job ID; this request is locked to prevent a duplicate render. Contact support before retrying.');
-    }
-    const submitted=await updatePreviewClaim(requestId,reservation.claim,blobToken,'submitted',{jobId,runpodStatus:String(payload.status||'')});
+    const jobId=String(dispatched.runpodJobId||'').trim();
+    if(!jobId)throw new Error('RunPod returned no job ID; this request is locked to prevent a duplicate render. Contact support before retrying.');
+    const submitted=await updatePreviewClaim(requestId,reservation.claim,blobToken,'submitted',{jobId,runpodStatus:String(dispatched.runpodStatus||'')});
     return res.status(200).json(previewClaimResponse(submitted));
   }catch(e){
     const message=String(e?.message||e);
