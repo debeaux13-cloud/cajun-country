@@ -1,5 +1,6 @@
 import{head,put}from'@vercel/blob';
 import{subjectContract}from'../../../../lib/subject-contract';
+import{persistSavedPreview}from'../../../../lib/saved-previews';
 function auth(req){const s=process.env.MCS_WORKER_SECRET||'';const h=req.headers.authorization||'';return !!s&&(h==='Bearer '+s||h===s)}
 async function loadStory(id){const token=process.env.BLOB_READ_WRITE_TOKEN;if(!token)throw new Error('Blob storage missing');const path=`mcs/jobs/${id}/story-plan.bin`;const meta=await head(path,{token});const r=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)throw new Error(`Story fetch failed ${r.status}`);const saved=JSON.parse(await r.text());if(!Array.isArray(saved?.screenplay?.scenes)||saved.screenplay.scenes.length!==18)throw new Error('Structured screenplay missing');return saved}
 function previewScenes(saved){return saved.screenplay.scenes.slice(0,6).map((s,i)=>({...s,sceneNumber:i+1,staticLevel:0,hero_scene:true,animationProvider:'runway-gen4-turbo'}))}
@@ -41,6 +42,7 @@ export default async function handler(req,res){if(!auth(req))return res.status(4
   const update={...body,scene:Number.isFinite(scene)?scene:0,updatedAt:new Date().toISOString()};
   const path=`mcs/jobs/${id}/progress-${update.scene||0}.json`;
   await put(path,Buffer.from(JSON.stringify(update)),{access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'});
+  if(update.stage==='ready'&&update.status==='ready')await persistSavedPreview(id,token,update.updatedAt);
   console.log('[preview-scene]',JSON.stringify({id,stage:update.stage||'',status:update.status||'',scene:update.scene||0,provider:update.provider||'',providerJobId:update.providerJobId||''}));
   return res.status(200).json({ok:true,id,...update});
 }return res.status(405).json({error:'Method not allowed'})}

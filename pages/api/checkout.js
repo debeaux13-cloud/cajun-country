@@ -6,8 +6,13 @@ async function verifiedPreview(mcsJobId){
   if(!token)throw new Error('Preview verification is not configured');
   const preview=await getSavedPreview(mcsJobId,token);
   if(!preview)throw new Error('The free preview must be ready before checkout');
-  const movie=await head(`mcs/jobs/${mcsJobId}/preview-movie.bin`,{token});
-  if(movie.contentType!=='video/mp4'||Number(movie.size)<500*1024)throw new Error('The free preview media is incomplete');
+  const required=[
+    {pathname:`mcs/jobs/${mcsJobId}/reference.bin`,contentType:/^image\//},
+    {pathname:`mcs/jobs/${mcsJobId}/preview-movie.bin`,contentType:'video/mp4',minimum:500*1024},
+    ...Array.from({length:6},(_,index)=>[{pathname:`mcs/jobs/${mcsJobId}/scene-image-${index+1}.bin`,contentType:'image/png'},{pathname:`mcs/jobs/${mcsJobId}/narration-${index+1}.bin`,contentType:'audio/mpeg'},{pathname:`mcs/jobs/${mcsJobId}/sound-effect-${index+1}.bin`,contentType:'audio/mpeg'},{pathname:`mcs/jobs/${mcsJobId}/scene-video-${index+1}.bin`,contentType:'video/mp4',minimum:100*1024}]).flat()
+  ];
+  const assets=await Promise.all(required.map(asset=>head(asset.pathname,{token})));
+  if(assets.some((asset,index)=>{const expected=required[index];return !(typeof expected.contentType==='string'?asset.contentType===expected.contentType:expected.contentType.test(asset.contentType))||Number(asset.size||0)<Number(expected.minimum||1)}))throw new Error('The free preview media is incomplete');
   return preview;
 }
 
