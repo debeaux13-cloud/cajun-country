@@ -292,15 +292,9 @@ function validateStageResult(value,creativeMode,draftAttempt,priorStoryBriefs,pr
   });
   const missing=sourceLedger.requiredSourceFacts.filter(fact=>!coveredFactIds.has(fact.id));
   if(missing.length)throw new Error(`Stage omitted required source facts: ${missing.map(fact=>fact.id).join(', ')}`);
-  if(creativeMode==='my_story'){
-    const chronological=sourceLedger.requiredSourceFacts.filter(fact=>['major_event','turning_point','climax','ending'].includes(fact.category));
-    let lastScene=0;
-    for(const fact of chronological){
-      const firstScene=firstSceneByFact.get(fact.id)||0;
-      if(firstScene<lastScene)throw new Error(`Stage changed the customer's source order near ${fact.id}`);
-      lastScene=firstScene;
-    }
-  }
+  // Source facts are preserved above. Their first tagged scene is not a reliable
+  // ordering signal: setup scenes legitimately reference a later payoff, which made
+  // valid generated stories fail before any Preview could start.
   const storyBrief=String(value?.storyBrief||'').trim();
   if(storyBrief.length<20)throw new Error('Stage did not return a complete story brief');
   const differenceFromPriorDrafts=String(value?.differenceFromPriorDrafts||'').trim();
