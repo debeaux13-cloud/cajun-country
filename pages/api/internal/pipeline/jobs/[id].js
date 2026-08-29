@@ -5,7 +5,7 @@ import{normalizeSubjects,subjectContract}from'../../../../../lib/subject-contrac
 
 export const config={maxDuration:300};
 
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
 const PROVIDER_PHASES=['image','animation'];
 
 function auth(req){const secret=process.env.MCS_WORKER_SECRET||'';const header=req.headers.authorization||'';return!!secret&&(header==='Bearer '+secret||header===secret)}
@@ -19,8 +19,9 @@ async function loadStageData(id){
   if(Array.isArray(saved?.screenplay?.scenes)&&saved.screenplay.scenes.length===18)return saved;
   if(!saved?.stage?.scenes)throw new Error('The Stage scene record is required; production will not rewrite a customer story.');
   const moods=storyMoods(saved);
-  const screenplay=enrichStageScreenplay(saved.stage,{moods,subjectIdentity:saved.subjectIdentity});
-  const upgraded={...saved,moods,selectedVibe:moods[0],screenplay};
+  const stageWithLedger={...saved.stage,sourceLedger:saved.stage?.sourceLedger??saved.sourceLedger??null};
+  const screenplay=enrichStageScreenplay(stageWithLedger,{moods,subjectIdentity:saved.subjectIdentity});
+  const upgraded={...saved,stage:stageWithLedger,moods,selectedVibe:moods[0],screenplay};
   await put(pathname,JSON.stringify(upgraded),{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',token});
   return upgraded;
 }
