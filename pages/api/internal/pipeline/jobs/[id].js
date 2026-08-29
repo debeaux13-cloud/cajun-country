@@ -5,7 +5,7 @@ import{normalizeSubjects,subjectContract}from'../../../../../lib/subject-contrac
 
 export const config={maxDuration:300};
 
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PROVIDER_PHASES=['image','animation'];
 
 function auth(req){const secret=process.env.MCS_WORKER_SECRET||'';const header=req.headers.authorization||'';return!!secret&&(header==='Bearer '+secret||header===secret)}
