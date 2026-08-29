@@ -15,21 +15,19 @@ DEFAULT_VIBE = 'surprise me'
 SUPPORTED_VIBES = {
     DEFAULT_VIBE,
     'funny',
-    'magical',
-    'adventure',
-    'heartwarming',
-    'mystery',
-    'kid-safe spooky',
+    'silly',
+    'dramatic',
+    'spooky',
+    'romantic',
 }
 
 _VIBE_PROMPTS = {
     'surprise me': 'bright cinematic wonder with warm piano, playful woodwinds, gentle strings, and a small feeling of discovery',
     'funny': 'playful comedy with pizzicato strings, marimba, bassoon, and tiny soft percussion accents',
-    'magical': 'sparkling child-friendly magic with celesta, harp, airy pads, and warm sweeping strings',
-    'adventure': 'buoyant family adventure with rhythmic strings, soft hand percussion, woodwinds, and restrained brass',
-    'heartwarming': 'tender family warmth with felt piano, acoustic guitar, soft strings, and a reassuring melody',
-    'mystery': 'curious child-friendly mystery with plucked strings, marimba, clarinet, and gentle suspended harmony',
-    'kid-safe spooky': 'whimsical kid-safe spookiness with celesta, pizzicato strings, bassoon, and playful minor-key curiosity',
+    'silly': 'bouncy playful mischief with pizzicato strings, kazoos, marimba, and soft comic percussion',
+    'dramatic': 'sweeping cinematic strings, piano, restrained brass, and determined rhythmic momentum',
+    'spooky': 'gentle suspense with celesta, muted strings, bass clarinet, and curious minor-key atmosphere',
+    'romantic': 'warm tender piano, soft strings, acoustic guitar, and a graceful affectionate melody',
 }
 
 # A deterministic, provider-free safety bed for every supported vibe.  The
@@ -38,11 +36,10 @@ _VIBE_PROMPTS = {
 _LOCAL_PROFILES = {
     'surprise me': ((261.63, 329.63, 392.00), 0.42),
     'funny': ((293.66, 369.99, 440.00), 3.20),
-    'magical': ((523.25, 659.25, 783.99), 0.70),
-    'adventure': ((196.00, 246.94, 293.66), 1.35),
-    'heartwarming': ((220.00, 277.18, 329.63), 0.28),
-    'mystery': ((220.00, 261.63, 329.63), 0.82),
-    'kid-safe spooky': ((196.00, 233.08, 293.66), 1.05),
+    'silly': ((392.00, 493.88, 587.33), 3.70),
+    'dramatic': ((146.83, 220.00, 293.66), 0.58),
+    'spooky': ((174.61, 207.65, 246.94), 0.90),
+    'romantic': ((220.00, 277.18, 329.63), 0.28),
 }
 
 

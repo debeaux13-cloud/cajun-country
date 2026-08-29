@@ -9,7 +9,7 @@ from pipeline_steps import build_movie, create_character_master, illustrate, loc
 from storybook_pdf import build_storybook_pdf
 from runway_adapter import RunwayGen4Turbo
 
-BUNDLE_VERSION="2026-08-27-mcs-v20-canonical-character-master"
+BUNDLE_VERSION="2026-08-29-mcs-launch-repair"
 
 def req(name):
     v=os.environ.get(name,"").strip()

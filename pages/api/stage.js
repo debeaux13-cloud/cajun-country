@@ -277,7 +277,7 @@ function validateStageResult(value,creativeMode,draftAttempt,priorStoryBriefs,pr
     const visual=String(scene?.visual||'').trim();
     if(title.length<2||location.length<2||narration.length<20||visual.length<20)throw new Error(`Stage scene ${sceneNumber} is incomplete`);
     const narrationWords=narration.split(/\s+/).filter(Boolean).length;
-    if(narrationWords<16||narrationWords>34)throw new Error(`Stage scene ${sceneNumber} narration is outside the safe ten-second range`);
+    if(narrationWords<16||narrationWords>22)throw new Error(`Stage scene ${sceneNumber} narration is outside the safe ten-second range`);
     if(/^\s*(scene|chapter)\s*\d+/i.test(narration))throw new Error(`Stage scene ${sceneNumber} narration contains an internal label`);
     const sourceFactIds=cleanStringArray(scene?.sourceFactIds);
     for(const id of sourceFactIds){
@@ -357,7 +357,7 @@ FILM RULES:
 - Scenes 7-18 complete the same story with escalation, a real climax, and the customer's satisfying emotional ending.
 - Every scene must causally lead into the next: setup creates the goal, each attempt creates a consequence, the setback changes the plan, and the climax resolves the central problem. No disconnected events, unexplained jumps, random props, or filler.
 - Every scene materially changes what is happening through location, blocking, objective, obstacle, prop, supporting character, discovery, or emotion. Do not use filler whose only change is camera angle.
-- Give enough narration for the full three minutes. Each scene needs roughly 20-30 naturally spoken words. Never narrate Scene 1, Scene 2, chapter labels, or production notes.
+- Give enough narration for the full three minutes. Each scene needs 16-22 naturally spoken words per 10-second scene. Never narrate Scene 1, Scene 2, chapter labels, or production notes.
 - Narration describes story and emotion, never camera directions. The visual must match it exactly.
 - Use polished cinematic animated-feature storytelling: dimensional and expressive, between flat children's cartoon and photoreal live action, with detailed environments, depth, meaningful props, and supporting characters where the story calls for them.
 - The main character visibly moves, travels, reacts, and physically interacts. Moving scenery alone does not count.
