@@ -265,9 +265,10 @@ export default async function handler(req,res){
     const subjectIdentity=await analyzeReference(dataUrl);
     const stage=req.body?.stage&&typeof req.body.stage==='object'?req.body.stage:null;
     if(!stage?.scenes)throw new Error('The approved Stage scenes are required to start production.');
-    const screenplay=lockScreenplayIdentity(enrichStageScreenplay(stage,{moods,subjectIdentity}),subjectIdentity);
+    const stageWithLedger={...stage,sourceLedger:sourceLedger??stage.sourceLedger??null};
+    const screenplay=lockScreenplayIdentity(enrichStageScreenplay(stageWithLedger,{moods,subjectIdentity}),subjectIdentity);
     await store(mcsJobId,'reference',image,imageType);
-    await store(mcsJobId,'story-plan',Buffer.from(JSON.stringify({creativeMode,storyBrief,sourceLedger,originalIdea,plan:editedStory,stage,moods,selectedVibe:moods[0],screenplay,subjectIdentity})),'application/json');
+    await store(mcsJobId,'story-plan',Buffer.from(JSON.stringify({creativeMode,storyBrief,sourceLedger,originalIdea,plan:editedStory,stage:stageWithLedger,moods,selectedVibe:moods[0],screenplay,subjectIdentity})),'application/json');
     let dispatched;
     try{
       if(process.env.VERCEL_ENV==='preview'){
