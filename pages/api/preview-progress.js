@@ -10,6 +10,13 @@ async function readProgress(id,scene,token){
   }catch{return null}
 }
 
+async function hasAsset(path,type,token){
+  try{
+    const meta=await head(path,{token});
+    return meta.contentType===type&&Number(meta.size)>0;
+  }catch{return false}
+}
+
 function scenePercent(item){
   if(!item)return 0;
   const stage=String(item.stage||'').toLowerCase();
@@ -24,8 +31,9 @@ function scenePercent(item){
   return 6;
 }
 
-function messageFor(latest,complete,global){
-  if(global?.stage==='ready'||global?.status==='ready')return'Your preview is ready.';
+function messageFor(latest,complete,global,status){
+  if(status==='COMPLETED')return'Your preview is ready.';
+  if(global?.stage==='ready'||global?.status==='ready')return'Your preview is being finalized…';
   if(global?.stage==='assembling')return'All six scenes are finished. Adding sound and assembling your movie…';
   if(complete>0)return`Scene ${complete} of 6 finished. The remaining scenes are still rendering…`;
   const stage=String(latest?.stage||'').toLowerCase();
@@ -42,23 +50,36 @@ export default async function handler(req,res){
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))return res.status(400).json({error:'Valid preview ID required'});
   const token=process.env.BLOB_READ_WRITE_TOKEN||'';
   if(!token)return res.status(503).json({error:'Preview storage unavailable'});
-  const values=await Promise.all([0,1,2,3,4,5,6].map(scene=>readProgress(id,scene,token)));
+  const [values,movieReady,pdfReady]=await Promise.all([
+    Promise.all([0,1,2,3,4,5,6].map(scene=>readProgress(id,scene,token))),
+    hasAsset(`mcs/jobs/${id}/preview-movie.bin`,'video/mp4',token),
+    hasAsset(`mcs/jobs/${id}/preview-storybook-pdf.bin`,'application/pdf',token)
+  ]);
   const global=values[0];
   const scenes=values.slice(1);
   const active=scenes.filter(Boolean);
   const completedScenes=scenes.filter(item=>String(item?.status||'').toLowerCase()==='animated').length;
   const latest=[global,...active].filter(Boolean).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')))[0]||null;
+  const globalStage=String(global?.stage||'').toLowerCase();
+  const globalStatus=String(global?.status||'').toLowerCase();
+  const globalReady=globalStage==='ready'||globalStatus==='ready';
+  const terminalFailure=globalStage==='manual_review'||globalStatus==='manual_review'||globalStatus==='failed';
+  const storedPreviewReady=globalReady&&movieReady&&pdfReady;
+  const status=storedPreviewReady?'COMPLETED':terminalFailure?(globalStage==='manual_review'||globalStatus==='manual_review'?'MANUAL_REVIEW':'FAILED'):(globalStage==='queued'||globalStatus==='queued'||globalStatus==='in_queue'?'IN_QUEUE':'IN_PROGRESS');
   let progress=Math.round(scenes.reduce((sum,item)=>sum+scenePercent(item),0)/6*.9);
-  if(global?.stage==='assembling')progress=96;
-  if(global?.stage==='ready'||global?.status==='ready')progress=100;
+  if(globalStage==='assembling')progress=96;
+  if(storedPreviewReady)progress=100;
   return res.status(200).json({
     ok:true,
     progress,
     completedScenes,
     activeScenes:active.length,
     stage:latest?.stage||'starting',
-    status:latest?.status||'working',
-    message:messageFor(latest,completedScenes,global),
+    status,
+    storedPreviewReady,
+    videoUrl:storedPreviewReady?'/api/preview-media?id='+encodeURIComponent(id):null,
+    error:terminalFailure?(global?.error||null):null,
+    message:messageFor(latest,completedScenes,global,status),
     updatedAt:latest?.updatedAt||null
   });
 }
