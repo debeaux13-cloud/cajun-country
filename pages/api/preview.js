@@ -218,6 +218,7 @@ export default async function handler(req,res){
       if(!claim)return res.status(404).json({error:'Preview request not found'});
       if(claim.status==='submitted'&&claim.jobId&&claim.mcsJobId)return res.status(200).json(previewClaimResponse(claim));
       if(claim.status==='submitting')return res.status(202).json({ok:true,pending:true,mcsJobId:claim.mcsJobId||'',status:'SUBMITTING'});
+      if(claim.status==='failed')return res.status(409).json({error:'We could not complete this free preview after several automatic attempts. No payment was taken. Please create a new preview request with your photo and story.',mcsJobId:claim.mcsJobId||'',failureCode:claim.failureCode||'recovery_exhausted'});
       if(claim.status==='submission_unknown')return res.status(409).json({error:'This preview may already be running, but its provider receipt was interrupted. Contact support before trying again so no duplicate render is charged.',mcsJobId:claim.mcsJobId||''});
       return res.status(409).json({error:'This preview request was not accepted. Contact support before retrying.',mcsJobId:claim.mcsJobId||''});
     }catch(error){

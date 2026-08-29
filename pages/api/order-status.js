@@ -112,8 +112,8 @@ export default async function handler(req,res){
         completedScenes:null,
         progress:null,
         message:refunded
-          ?'This movie could not be completed. Your payment was automatically refunded.'
-          :'This movie could not be completed. Your automatic refund is being processed.',
+          ?'We could not complete this movie, and your payment was automatically refunded.'
+          :'We could not complete this movie. Your payment needs studio review before a refund can be completed.',
         movieUrl:null,
         storybookUrl:null,
         refunded,
