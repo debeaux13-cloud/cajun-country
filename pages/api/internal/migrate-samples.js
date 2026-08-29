@@ -13,7 +13,7 @@ async function exists(pathname,token){try{const meta=await head(pathname,{token}
 export default async function handler(req,res){
   res.setHeader('Cache-Control','private, no-store');
   if(process.env.VERCEL_ENV!=='preview')return res.status(404).json({error:'Not found'});
-  if(req.method!=='POST')return res.status(405).json({error:'POST only'});
+  if(req.method!=='GET')return res.status(405).json({error:'GET only'});
   const token=process.env.BLOB_READ_WRITE_TOKEN||'';
   if(!token)return res.status(503).json({error:'Blob storage unavailable'});
   const results=[];
