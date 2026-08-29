@@ -4,8 +4,8 @@ import{persistSavedPreview}from'../../../../lib/saved-previews';
 function auth(req){const s=process.env.MCS_WORKER_SECRET||'';const h=req.headers.authorization||'';return !!s&&(h==='Bearer '+s||h===s)}
 async function loadStory(id){const token=process.env.BLOB_READ_WRITE_TOKEN;if(!token)throw new Error('Blob storage missing');const path=`mcs/jobs/${id}/story-plan.bin`;const meta=await head(path,{token});const r=await fetch(meta.downloadUrl||meta.url,{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)throw new Error(`Story fetch failed ${r.status}`);const saved=JSON.parse(await r.text());if(!Array.isArray(saved?.screenplay?.scenes)||saved.screenplay.scenes.length!==18)throw new Error('Structured screenplay missing');return saved}
 function previewScenes(saved){return saved.screenplay.scenes.slice(0,6).map((s,i)=>({...s,sceneNumber:i+1,staticLevel:0,hero_scene:true,animationProvider:'runway-gen4-turbo'}))}
-const STORY_VIBES=new Set(['surprise me','funny','magical','adventure','heartwarming','mystery','kid-safe spooky']);
-function storyMoods(saved){const values=Array.isArray(saved?.moods)?saved.moods:[saved?.selectedVibe];const moods=values.map(value=>String(value||'').trim().toLowerCase()).filter(value=>STORY_VIBES.has(value));return[moods[0]||'surprise me']}
+import{normalizeMoods}from '../../../../lib/mcs-contract';
+function storyMoods(saved){return normalizeMoods(Array.isArray(saved?.moods)?saved.moods:[saved?.selectedVibe]);}
 async function contract(id){
   const origin='https://main-character-studios.vercel.app';
   const paidAsset=`${origin}/api/internal/pipeline/jobs/${id}/asset`;

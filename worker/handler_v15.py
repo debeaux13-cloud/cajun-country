@@ -5,7 +5,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import requests, runpod
 from audio_polish import add_background_music
-from pipeline_steps import build_movie, build_pdf, illustrate, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
+from storybook_pdf import build_storybook_pdf
+from pipeline_steps import build_movie, illustrate, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
 from runway_adapter import RunwayGen4Turbo
 
 BUNDLE_VERSION="2026-08-26-mcs-v17-retry-safe-provider-checkpoints"
@@ -166,7 +167,7 @@ def handler(event):
                 for f in as_completed(fut):rendered[fut[f]]=f.result()
             images=[x[0] for x in rendered]; narr=[x[1] for x in rendered]; sounds=[x[2] for x in rendered]; vids=[x[3] for x in rendered]; validate_unique_scene_images(images)
             update("assembling"); movie=str(root/"story-video.mp4"); build_movie(vids,narr,folder,movie,180,sound_effect_paths=sounds); add_background_music(movie,folder,180); verify_movie(movie,180); upload("final-movie",movie,content_type="video/mp4")
-            update("verifying"); pdf=str(root/"storybook.pdf"); build_pdf(manifest,images,pdf); upload("storybook-pdf",pdf,content_type="application/pdf"); update("ready",status="ready",manifest=manifest)
+            update("verifying"); pdf=str(root/"storybook.pdf"); build_storybook_pdf(manifest,images,pdf); upload("storybook-pdf",pdf,content_type="application/pdf"); update("ready",status="ready",manifest=manifest)
             return {"jobId":job_id,"status":"ready","tier":"three_minute","completed":18,"movieSeconds":180}
     except Exception as e:
         try:update("manual_review",status="failed",error=str(e))

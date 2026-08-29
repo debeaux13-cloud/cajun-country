@@ -1,4 +1,6 @@
 import {getVercelOidcToken} from '@vercel/oidc';
+import {normalizeMoods as canonicalMoods} from '../../lib/mcs-contract';
+import {validateStageScenes} from '../../lib/stage-production';
 
 const MAX_STORY_CHARACTERS=60000;
 const MAX_MOODS=8;
@@ -20,12 +22,7 @@ function normalizeStoryInput(value,{allowEmpty=false}={}){
   return text;
 }
 
-function normalizeMoods(value){
-  const items=Array.isArray(value)?value:[value];
-  const moods=[...new Set(items.map(item=>String(item??'').trim().toLowerCase()).filter(item=>STORY_VIBES.has(item)))].slice(0,MAX_MOODS);
-  if(!moods.length||moods.includes('surprise me'))return['surprise me'];
-  return moods;
-}
+function normalizeMoods(value){return canonicalMoods(value);}
 
 function normalizeDraftAttempt(value){
   const attempt=value===undefined||value===null||value===''?1:Number(value);
@@ -306,6 +303,7 @@ function validateStageResult(value,creativeMode,draftAttempt,priorStoryBriefs,pr
   const differenceFromPriorDrafts=String(value?.differenceFromPriorDrafts||'').trim();
   if(draftAttempt>1&&differenceFromPriorDrafts.length<30)throw new Error('Stage did not explain how the alternate draft is materially different');
   if(draftAttempt>1&&priorStoryBriefs.some(brief=>wordSimilarity(storyBrief,brief)>.82))throw new Error('Stage alternate draft is too similar to a prior draft');
+  validateStageScenes(scenes);
   return{title:String(value?.title||'Main Character Studios Movie').trim(),creativeMode,draftAttempt,storyBrief,differenceFromPriorDrafts,sourceLedger,scenes};
 }
 
@@ -381,7 +379,7 @@ Return only the strict JSON requested by the schema. Do not add prose outside it
       let parsed;
       try{parsed=JSON.parse(stripFence(previousOutput))}catch{throw new Error('Stage returned invalid structured story data')}
       const result=validateStageResult(parsed,creativeMode,draftAttempt,priorStoryBriefs,priorSourceLedgers,Boolean(referenceImage));
-      return{plan:formatPlan(result.scenes),sourceLedger:result.sourceLedger,title:result.title,storyBrief:result.storyBrief,differenceFromPriorDrafts:result.differenceFromPriorDrafts,creativeMode:result.creativeMode,draftAttempt:result.draftAttempt,auth};
+      return{plan:formatPlan(result.scenes),scenes:result.scenes,sourceLedger:result.sourceLedger,title:result.title,storyBrief:result.storyBrief,differenceFromPriorDrafts:result.differenceFromPriorDrafts,creativeMode:result.creativeMode,draftAttempt:result.draftAttempt,auth};
     }catch(error){
       lastValidationError=error;
       if(attempt===1)throw error;
@@ -395,9 +393,9 @@ export default async function handler(req,res){
   const trigger=req.body?.trigger==='ai_chat'?'ai_chat':'story_button';
   try{
     console.log('[stage-automation]',JSON.stringify({event:'started',trigger,draftAttempt:Number(req.body?.draftAttempt)||1,hasPhoto:Boolean(req.body?.image)}));
-    const{plan,sourceLedger,title,storyBrief,differenceFromPriorDrafts,creativeMode,draftAttempt,auth}=await makePlan(req.body?.idea,req.body?.moods,req.body?.image,req.body?.draftAttempt,req.body?.priorStoryBriefs,req.body?.priorSourceLedgers);
+    const{plan,scenes,sourceLedger,title,storyBrief,differenceFromPriorDrafts,creativeMode,draftAttempt,auth}=await makePlan(req.body?.idea,req.body?.moods,req.body?.image,req.body?.draftAttempt,req.body?.priorStoryBriefs,req.body?.priorSourceLedgers);
     console.log('[stage-automation]',JSON.stringify({event:'completed',trigger,draftAttempt,title}));
-    return res.status(200).json({ok:true,plan,sourceLedger,title,storyBrief,differenceFromPriorDrafts,creativeMode,draftAttempt,provider:'vercel-ai-gateway',auth});
+    return res.status(200).json({ok:true,plan,scenes,sourceLedger,title,storyBrief,differenceFromPriorDrafts,creativeMode,draftAttempt,provider:'vercel-ai-gateway',auth});
   }catch(error){
     console.error('[stage-automation]',JSON.stringify({event:'failed',trigger,error:String(error?.message||error).slice(0,300)}));
     const status=/at least one thing|longer than|draft attempt|prior story|prior source|add a clear photo|reference|photo/i.test(String(error?.message||''))?400:503;

@@ -9,7 +9,7 @@ function load(records){
     .replace("import crypto from 'crypto';","const crypto=require('crypto');")
     .replace("import { BlobNotFoundError, head, put } from '@vercel/blob';","const {BlobNotFoundError,head,put}=blob;")
     .replace("import { getPreviewClaimByMcsJobId } from './preview-guard';","const getPreviewClaimByMcsJobId=async()=>({createdAt:'2026-08-28T00:00:00.000Z',jobId:'provider-private'});")
-    .replace(/export async function /g,'async function ').replace(/export function /g,'function ').replace(/export \{DAY,active,moviePath,publicRecord\};/, 'module.exports={DAY,active,moviePath,publicRecord,persistSavedPreview,ensureSavedPreview,getSavedPreview,getSavedPreviewByShare,storedMovieAvailable};');
+    .replace(/export async function /g,'async function ').replace(/export function /g,'function ').replace(/export \{DAY,active,moviePath,storybookPath,publicRecord\};/, 'module.exports={DAY,active,moviePath,storybookPath,publicRecord,persistSavedPreview,ensureSavedPreview,getSavedPreview,getSavedPreviewByShare,storedMovieAvailable};');
   class BlobNotFoundError extends Error{}
   const blob={BlobNotFoundError,head:async pathname=>{if(pathname===`mcs/jobs/${ID}/preview-movie.bin`)return{contentType:'video/mp4',size:600000};if(!records[pathname])throw new BlobNotFoundError('missing');return{downloadUrl:'blob://'+pathname};},put:async(pathname,value)=>{records[pathname]=JSON.parse(value)}};
   const context={module:{exports:{}},require,crypto:require('crypto'),blob,BlobNotFoundError,Date,JSON,String,Number,Boolean,Math,fetch:async url=>({ok:true,json:async()=>records[String(url).replace('blob://','')]})};vm.runInNewContext(source,context);return context.module.exports;

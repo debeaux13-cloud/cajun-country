@@ -71,7 +71,7 @@ class RunwayGen4Turbo:
                         "model": "gen4_turbo",
                         "promptImage": prompt_image,
                         "promptText": prompt_text,
-                        "ratio": "1280:720",
+                        "ratio": "768:1024",
                         "duration": self.duration,
                     },
                     timeout=60,

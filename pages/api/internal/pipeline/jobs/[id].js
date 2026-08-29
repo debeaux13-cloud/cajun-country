@@ -1,5 +1,6 @@
 import{BlobNotFoundError,head,put}from'@vercel/blob';
-import{compileStoryScreenplay}from'../../../_story-screenplay';
+import{enrichStageScreenplay}from'../../../../../lib/stage-production';
+import{normalizeMoods}from '../../../../../lib/mcs-contract';
 import{normalizeSubjects,subjectContract}from'../../../../../lib/subject-contract';
 
 export const config={maxDuration:300};
@@ -16,25 +17,18 @@ async function loadStageData(id){
   const pathname=`mcs/jobs/${id}/story-plan.bin`;
   const saved=await readPrivateJson(pathname,token);
   if(Array.isArray(saved?.screenplay?.scenes)&&saved.screenplay.scenes.length===18)return saved;
-  const plan=String(saved?.plan||saved?.storyBrief||saved?.originalIdea||'').trim();
-  if(!plan)throw new Error('Legacy story plan has no recoverable story text');
+  if(!saved?.stage?.scenes)throw new Error('The Stage scene record is required; production will not rewrite a customer story.');
   const moods=storyMoods(saved);
-  const screenplay=await compileStoryScreenplay(plan,moods,{
-    originalIdea:String(saved?.originalIdea||''),
-    sourceLedger:saved?.sourceLedger||null,
-    subjectRoster:normalizeSubjects(saved?.subjectIdentity)
-  });
-  const upgraded={...saved,plan,moods,selectedVibe:moods[0],screenplay};
+  const screenplay=enrichStageScreenplay(saved.stage,{moods,subjectIdentity:saved.subjectIdentity});
+  const upgraded={...saved,moods,selectedVibe:moods[0],screenplay};
   await put(pathname,JSON.stringify(upgraded),{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',token});
-  console.info('Legacy paid story plan upgraded',{id,sceneCount:screenplay.scenes.length});
   return upgraded;
 }
 function storyScenes(saved){return saved.screenplay.scenes.map((scene,index)=>{const identityLock=String(scene.identityLock||'Preserve exact uploaded identity and anatomy.').slice(0,330);return{...scene,identityLock,sceneNumber:index+1,staticLevel:0,hero_scene:true,animationProvider:'runway-gen4-turbo',requiredVisibleDetails:[...(scene.requiredVisibleDetails||[]),identityLock]}})}
 function checkpointPath(id,phase,scene){return`mcs/jobs/${id}/provider-tasks/${phase}-scene-${scene}.json`}
 async function loadProviderJobs(id){const token=process.env.BLOB_READ_WRITE_TOKEN;if(!token)throw new Error('Blob storage missing');const records=await Promise.all(Array.from({length:12},(_,index)=>index+7).flatMap(scene=>PROVIDER_PHASES.map(async phase=>{try{return await readPrivateJson(checkpointPath(id,phase,scene),token)}catch(error){if(error instanceof BlobNotFoundError)return null;throw error}})));const jobs={};for(const record of records.filter(Boolean)){const scene=Number(record.sceneNumber);const taskId=String(record.providerJobId||'');if(scene<7||scene>18||!UUID.test(taskId)||record.status==='provider_failed')continue;const entry=jobs[String(scene)]||(jobs[String(scene)]={});if(record.phase==='image'){entry.imageProviderJobId=taskId;entry.imageProvider=String(record.provider||'');entry.imageStatus=String(record.status||'')}if(record.phase==='animation'){entry.animationProviderJobId=taskId;entry.animationProvider=String(record.provider||'');entry.animationStatus=String(record.status||'');entry.providerJobId=taskId}}return jobs}
 async function persistProviderCheckpoint(id,body){const scene=Number(body?.scene);const stage=String(body?.stage||'');const status=String(body?.status||'');const providerJobId=String(body?.providerJobId||'').trim();if(!providerJobId||providerJobId==='motion-quality-rerender'||scene<7||scene>18)return false;const phase=stage==='illustrating'?'image':stage==='animating'?'animation':'';if(!phase||!['provider_started','provider_failed','illustrated','animated'].includes(status))return false;if(!UUID.test(providerJobId))throw new Error('Invalid provider task checkpoint');const provider=String(body?.provider||'');if(phase==='image'&&provider!=='runway-gen4-image-turbo')throw new Error('Invalid image provider checkpoint');if(phase==='animation'&&!['runway-gen4-turbo','runway-gen4-turbo-motion-retry'].includes(provider))throw new Error('Invalid animation provider checkpoint');const token=process.env.BLOB_READ_WRITE_TOKEN;if(!token)throw new Error('Blob storage missing');const record={version:1,sceneNumber:scene,phase,provider,providerJobId,status,retryAttempt:Number(body?.retryAttempt||0),priorProviderJobId:UUID.test(String(body?.priorProviderJobId||''))?String(body.priorProviderJobId):'',updatedAt:new Date().toISOString()};await put(checkpointPath(id,phase,scene),JSON.stringify(record),{access:'private',addRandomSuffix:false,allowOverwrite:true,contentType:'application/json',token});return true}
-const STORY_VIBES=new Set(['surprise me','funny','magical','adventure','heartwarming','mystery','kid-safe spooky']);
-function storyMoods(saved){const values=Array.isArray(saved?.moods)?saved.moods:[saved?.selectedVibe];const moods=values.map(value=>String(value||'').trim().toLowerCase()).filter(value=>STORY_VIBES.has(value));return[moods[0]||'surprise me']}
+function storyMoods(saved){return normalizeMoods(Array.isArray(saved?.moods)?saved.moods:[saved?.selectedVibe]);}
 async function contract(id){
   const base='https://main-character-studios.vercel.app/api/internal/pipeline/jobs/'+id;
   const runway=process.env.Runway||process.env.RUNWAY_API_KEY||'';

@@ -23,7 +23,7 @@ from reportlab.pdfgen import canvas
 SCENES = 18
 MOVIE_SECONDS = 180
 TRANSITION_SECONDS = 0.5
-MAX_NARRATION_TEMPO = 1.5
+MAX_NARRATION_TEMPO = 1.08
 NARRATION_END_PADDING_SECONDS = 0.2
 ELEVENLABS_TTS_ENDPOINT = "https://api.elevenlabs.io/v1/text-to-speech"
 ELEVENLABS_SFX_ENDPOINT = "https://api.elevenlabs.io/v1/sound-generation"
@@ -554,7 +554,7 @@ def canonical_character_prompt(identity_lock: str) -> str:
     prompt = (
         f"@Subject=upload. CHARACTER MASTER LOCK: {identity}. "
         "Upload defines identity, anatomy, face, colors, markings, clothing, and relative size—not its background or style. "
-        "Clean 16:9 full-subject cast portrait on a neutral pale studio set. "
+        "Clean 3:4 full-subject cast portrait on a neutral pale studio set. "
         "Warm dimensional animated 3D CGI, between flat cartoon and photoreal. "
         "Keep every subject separate and recognizable. "
         "No swaps, hybrids, duplicates, anatomy errors, text, logos, or collage."
@@ -582,17 +582,17 @@ def create_character_master(
 
 def locked_still_prompt(scene: dict) -> str:
     """Put identity, stylization, and scene truth inside Runway's hard 1,000-character limit."""
-    identity = _compact_prompt_value(scene.get("identityLock"), 470)
-    setting = _compact_prompt_value(scene.get("setting"), 48)
-    action = _compact_prompt_value(scene.get("visibleAction") or scene.get("description"), 65)
-    required = _compact_prompt_value(", ".join(scene.get("requiredVisibleDetails") or []), 48)
-    supporting = _compact_prompt_value(", ".join(scene.get("supportingCharacters") or []), 22)
+    identity = _compact_prompt_value(scene.get("identityLock"), 260)
+    setting = _compact_prompt_value(scene.get("setting"), 180)
+    action = _compact_prompt_value(scene.get("visibleAction") or scene.get("description"), 220)
+    required = _compact_prompt_value(", ".join(scene.get("requiredVisibleDetails") or []), 150)
+    supporting = _compact_prompt_value(", ".join(scene.get("supportingCharacters") or []), 90)
     prompt = (
         f"@Subject=character master. LOCK: {identity}. "
         "Preserve exact design, colors, markings, anatomy, face, clothing, and relative size. "
-        "STYLE: warm dimensional animated 3D CGI, between flat cartoon and photoreal. "
+        "STYLE: polished modern stylized 3D CGI animated-feature, sculpted depth, soft cinematic lighting, dimensional materials; never flat 2D, watercolor, painterly, collage, gothic distortion, uncanny photoreal, oversized features, hybrids, or anatomy drift. "
         f"SET: {setting}. ACT: {action}. SHOW: {required}. EXTRAS: {supporting or 'scene-listed only'}. "
-        "New 16:9 scene; replace the studio set. No color changes, swaps, hybrids, duplicates, anatomy errors, text, logo, or collage."
+        "New 3:4 scene; replace the studio set. No color changes, swaps, hybrids, duplicates, anatomy errors, text, logo, or collage."
     )
     if len(prompt) > 1000:
         raise ValueError("Locked still prompt exceeded Runway's 1,000-character limit")
@@ -631,7 +631,7 @@ def _runway_reference_image(
             headers=headers,
             json={
                 "model": "gen4_image_turbo",
-                "ratio": "1280:720",
+                "ratio": "768:1024",
                 "promptText": prompt[:1000],
                 "referenceImages": [{"uri": reference_uri, "tag": "Subject"}],
             },
@@ -731,7 +731,7 @@ def illustrate(
         return destination
     with open(reference_path, "rb") as image:
         response = _post_with_throttle_retry("https://api.openai.com/v1/images/edits", headers=_auth(), files={"image": ("reference.jpg", image, "image/jpeg")}, data={
-            "model": "gpt-image-2", "quality": "medium", "size": "1536x1024", "output_format": "png", "n": "1", "prompt": prompt,
+            "model": "gpt-image-2", "quality": "medium", "size": "1024x1536", "output_format": "png", "n": "1", "prompt": prompt,
         }, timeout=240)
     if response.status_code == 429:
         return _runway_reference_image(
@@ -918,7 +918,7 @@ def build_sequence(video_paths: list[str], audio_paths: list[str], workdir: str,
         else:
             audio_filter = f"[1:a]{narration_filters}apad,atrim=duration={audio_seconds},asetpts=PTS-STARTPTS[a]"
         command += [
-            "-filter_complex", f"[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,setpts={speed_factor}*PTS,trim=duration={segment_seconds},fps=30,setpts=PTS-STARTPTS[v];{audio_filter}",
+            "-filter_complex", f"[0:v]scale=960:1280:force_original_aspect_ratio=increase,crop=960:1280,setpts={speed_factor}*PTS,trim=duration={segment_seconds},fps=30,setpts=PTS-STARTPTS[v];{audio_filter}",
             "-map", "[v]", "-map", "[a]", "-t", str(segment_seconds), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart", segment,
         ]
         subprocess.run(command, check=True, timeout=240)

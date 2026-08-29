@@ -9,8 +9,10 @@ async function loadValidator(){
   const context=vm.createContext({Buffer,console,fetch:()=>{throw new Error('Network calls are forbidden in this test')},process});
   const module=new vm.SourceTextModule(fs.readFileSync(filename,'utf8'),{context,identifier:filename});
   await module.link(async specifier=>{
-    if(specifier!=='@vercel/oidc')throw new Error(`Unexpected import ${specifier}`);
-    return new vm.SyntheticModule(['getVercelOidcToken'],function(){this.setExport('getVercelOidcToken',async()=>{throw new Error('OIDC is forbidden in this test')})},{context});
+    if(specifier==='@vercel/oidc')return new vm.SyntheticModule(['getVercelOidcToken'],function(){this.setExport('getVercelOidcToken',async()=>{throw new Error('OIDC is forbidden in this test')})},{context});
+    if(specifier==='../../lib/mcs-contract')return new vm.SyntheticModule(['normalizeMoods'],function(){this.setExport('normalizeMoods',()=>['surprise me'])},{context});
+    if(specifier==='../../lib/stage-production')return new vm.SyntheticModule(['validateStageScenes'],function(){this.setExport('validateStageScenes',value=>value)},{context});
+    throw new Error(`Unexpected import ${specifier}`);
   });
   await module.evaluate();
   return module.namespace.validatePhotoCastCoverage;

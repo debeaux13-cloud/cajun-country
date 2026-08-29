@@ -3,16 +3,15 @@ import{put}from'@vercel/blob';
 import{getVercelOidcToken}from'@vercel/oidc';
 import{runpod}from'./_runpod';
 import{submitPreviewJob}from'../../lib/preview-worker-orchestrator';
-import{compileStoryScreenplay}from'./_story-screenplay';
+import{enrichStageScreenplay}from'../../lib/stage-production';
+import{normalizeMoods}from'../../lib/mcs-contract';
 import{MAX_REFERENCE_SUBJECTS,normalizeSubjects}from'../../lib/subject-contract';
 import{previewRequestIdFromEntitlement,verifyPhotoPreviewEntitlement}from'../../lib/photo-entitlement';
 import{classifyPreviewClaim,enforceOfficialPreviewOrigin,enforcePreviewRateLimit,getPreviewClaim,previewClaimResponse,previewRequestHash,reservePreviewClaim,updatePreviewClaim}from'../../lib/preview-guard';
 
 export const config={api:{bodyParser:{sizeLimit:'15mb'}}};
 
-const STORY_VIBES=new Set(['surprise me','funny','magical','adventure','heartwarming','mystery','kid-safe spooky']);
 const PHOTO_RETRY_ISSUES=new Set(['severe_blur','near_black','blown_out','subject_too_small','subject_mostly_hidden','corrupted_or_unreadable','ui_obstruction','no_principal_subject']);
-function normalizeMoods(value){const items=Array.isArray(value)?value:[value];const moods=items.map(item=>String(item||'').trim().toLowerCase()).filter(item=>STORY_VIBES.has(item));return[moods[0]||'surprise me']}
 
 function hasImageSignature(buffer,mime){
   if(mime==='image/jpeg')return buffer.length>=3&&buffer[0]===0xff&&buffer[1]===0xd8&&buffer[2]===0xff;
@@ -264,15 +263,11 @@ export default async function handler(req,res){
     if(image.toString('base64')!==encoded||!hasImageSignature(image,imageType))throw new Error('Photo file looks damaged or unreadable');
     const dataUrl=`data:${imageType};base64,${encoded}`;
     const subjectIdentity=await analyzeReference(dataUrl);
-    const compiled=await compileStoryScreenplay(editedStory,moods,{
-      creativeMode,
-      originalIdea,
-      sourceLedger,
-      subjectRoster:normalizeSubjects(subjectIdentity)
-    });
-    const screenplay=lockScreenplayIdentity(compiled,subjectIdentity);
+    const stage=req.body?.stage&&typeof req.body.stage==='object'?req.body.stage:null;
+    if(!stage?.scenes)throw new Error('The approved Stage scenes are required to start production.');
+    const screenplay=lockScreenplayIdentity(enrichStageScreenplay(stage,{moods,subjectIdentity}),subjectIdentity);
     await store(mcsJobId,'reference',image,imageType);
-    await store(mcsJobId,'story-plan',Buffer.from(JSON.stringify({creativeMode,storyBrief,sourceLedger,originalIdea,plan:editedStory,moods,selectedVibe:moods[0],screenplay,subjectIdentity})),'application/json');
+    await store(mcsJobId,'story-plan',Buffer.from(JSON.stringify({creativeMode,storyBrief,sourceLedger,originalIdea,plan:editedStory,stage,moods,selectedVibe:moods[0],screenplay,subjectIdentity})),'application/json');
     let dispatched;
     try{
       if(process.env.VERCEL_ENV==='preview'){

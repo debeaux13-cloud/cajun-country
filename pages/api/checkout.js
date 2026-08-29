@@ -8,7 +8,7 @@ async function verifiedPreview(mcsJobId){
   if(!preview)throw new Error('The free preview must be ready before checkout');
   const required=[
     {pathname:`mcs/jobs/${mcsJobId}/reference.bin`,contentType:/^image\//},
-    {pathname:`mcs/jobs/${mcsJobId}/preview-movie.bin`,contentType:'video/mp4',minimum:500*1024},
+    {pathname:`mcs/jobs/${mcsJobId}/preview-movie.bin`,contentType:'video/mp4',minimum:500*1024},{pathname:`mcs/jobs/${mcsJobId}/preview-storybook-pdf.bin`,contentType:'application/pdf',minimum:1024},
     ...Array.from({length:6},(_,index)=>[{pathname:`mcs/jobs/${mcsJobId}/scene-image-${index+1}.bin`,contentType:'image/png'},{pathname:`mcs/jobs/${mcsJobId}/narration-${index+1}.bin`,contentType:'audio/mpeg'},{pathname:`mcs/jobs/${mcsJobId}/sound-effect-${index+1}.bin`,contentType:'audio/mpeg'},{pathname:`mcs/jobs/${mcsJobId}/scene-video-${index+1}.bin`,contentType:'video/mp4',minimum:100*1024}]).flat()
   ];
   const assets=await Promise.all(required.map(asset=>head(asset.pathname,{token})));
@@ -18,6 +18,7 @@ async function verifiedPreview(mcsJobId){
 
 export default async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:'POST only'});
+  if(String(process.env.MCS_SALES_ENABLED||'').toLowerCase()!=='true')return res.status(503).json({error:'Main Character Studios checkout is temporarily paused while the studio finishes a production check. Your preview is safe.'});
   const key=process.env.Stripe||process.env.STRIPE_SECRET_KEY;
   if(!key)return res.status(503).json({error:'Stripe secret missing'});
   let mcsJobId=String(req.body?.mcsJobId||'').trim();

@@ -39,7 +39,7 @@ def build_storybook_pdf(manifest: dict, image_paths: list[str], destination: str
         raise ValueError(
             f'Storybook must match the movie exactly: {len(scenes)} scenes but {len(image_paths)} rendered images.'
         )
-    if len(scenes) not in {18, 30}:
+    if len(scenes) not in {6, 18}:
         raise ValueError(f'Storybook scene count must match a complete movie, not {len(scenes)} scenes.')
 
     title = str(manifest.get('title') or 'A Main Character Story').strip()
