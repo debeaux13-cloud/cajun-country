@@ -32,11 +32,9 @@ export default function MyOrders(){
     try{
       const savedPreview=JSON.parse(window.localStorage.getItem(PREVIEW_KEY)||'null');
       const savedHistory=JSON.parse(window.localStorage.getItem(PREVIEW_HISTORY_KEY)||'[]');
-      const history=Array.isArray(savedHistory)?savedHistory:[];
-      const previews=[savedPreview,...history]
-        .filter(item=>item?.url&&String(item.url).startsWith('/preview?'))
-        .filter((item,index,items)=>items.findIndex(candidate=>candidate.url===item.url)===index);
-      setPreviews(previews);
+      const history=[savedPreview,...(Array.isArray(savedHistory)?savedHistory:[])];
+      const ids=[...new Set(history.map(item=>String(item?.mcsJobId||new URLSearchParams(String(item?.url||'').split('?')[1]||'').get('mcsJobId')||'')).filter(Boolean))].slice(0,12);
+      if(ids.length)fetch('/api/saved-previews?ids='+encodeURIComponent(ids.join(',')),{cache:'no-store'}).then(response=>response.json()).then(result=>{if(Array.isArray(result.previews))setPreviews(result.previews)}).catch(()=>{});
     }catch{}
     if(id){
       setSessionId(id);
@@ -81,8 +79,8 @@ export default function MyOrders(){
       {previews.length>0&&<section style={{marginTop:24,background:'#fff',border:'2px solid #d83e9f',borderRadius:22,padding:24,boxShadow:'0 14px 35px rgba(94,32,181,.12)'}}>
         <small style={{letterSpacing:1.5,fontWeight:900,color:'#7b2cff'}}>SAVED MOVIE PREVIEWS</small>
         <h2 style={{fontSize:'clamp(25px,6vw,38px)',margin:'10px 0'}}>Your saved previews</h2>
-        <p style={{fontSize:18,lineHeight:1.55}}>Return to any preview saved on this device.</p>
-        <div style={{display:'grid',gap:12,marginTop:18}}>{previews.map((preview,index)=><div key={preview.url} style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'center',padding:16,border:'1px solid #eadced',borderRadius:16,flexWrap:'wrap'}}><div><strong>{preview.title||'Your free movie preview'}</strong><div style={{fontSize:14,color:'#6d6073',marginTop:4}}>{index===0?'Most recent preview':'Saved preview'}</div></div><a href={preview.url} style={{padding:'11px 16px',borderRadius:999,background:'linear-gradient(90deg,#ff4f78,#922bd1)',color:'#fff',fontWeight:900,textDecoration:'none'}}>Open preview →</a></div>)}</div>
+        <p style={{fontSize:18,lineHeight:1.55}}>Your saved previews are available for 24 hours after completion.</p>
+        <div style={{display:'grid',gap:12,marginTop:18}}>{previews.map((preview,index)=><div key={preview.mcsJobId} style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'center',padding:16,border:'1px solid #eadced',borderRadius:16,flexWrap:'wrap'}}><div><strong>{preview.title||'Your free movie preview'}</strong><div style={{fontSize:14,color:'#6d6073',marginTop:4}}>Available until {new Date(preview.expiresAt).toLocaleString()}</div></div><div style={{display:'flex',gap:8}}><a href={'/p/'+encodeURIComponent(preview.shareToken)} style={{padding:'11px 16px',borderRadius:999,background:'linear-gradient(90deg,#ff4f78,#922bd1)',color:'#fff',fontWeight:900,textDecoration:'none'}}>Watch preview</a><a href={'/api/p/'+encodeURIComponent(preview.shareToken)+'/media?kind=storybook'} target='_blank' rel='noreferrer'>Read matching storybook</a><button onClick={()=>navigator.clipboard?.writeText(location.origin+'/p/'+preview.shareToken)}>Share preview</button><a href={'/preview?mcsJobId='+encodeURIComponent(preview.mcsJobId)+'&buy=1'}>Buy full movie</a></div></div>)}</div>
       </section>}
       {!sessionId&&!previews.length&&<section style={{marginTop:24,background:'#fff',border:'1px solid #e6d8e8',borderRadius:22,padding:24}}><h2>Your movies live here.</h2><p>Start a free preview or open the confirmation link from checkout on this device. Your latest movie will appear here automatically.</p><a href='/create' style={{fontWeight:900,color:'#6d24c7'}}>Create my movie →</a></section>}
       {sessionId&&<section style={{marginTop:24,background:'#fff',border:'1px solid #e6d8e8',borderRadius:22,padding:24}}>

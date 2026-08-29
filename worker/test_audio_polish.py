@@ -74,5 +74,10 @@ class VibeMusicContinuityTest(unittest.TestCase):
             self.assertEqual(_first_minute_pcm(preview), _first_minute_pcm(paid))
 
 
+    def test_all_canonical_moods_survive_normalization(self) -> None:
+        for vibe in ('surprise me', 'funny', 'silly', 'dramatic', 'spooky', 'romantic'):
+            self.assertEqual(audio_polish.normalize_music_vibe(vibe), vibe)
+
+
 if __name__ == '__main__':
     unittest.main()

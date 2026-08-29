@@ -97,9 +97,12 @@ export default async function handler(req,res){
       catch{return res.status(202).json({ok:true,state:'starting',message:'Payment received. Your movie is starting.'})}
     }
 
-    if(String(order.stripeSessionId||'')!==sessionId||!String(order.runpodJobId||'').trim()){
+    if(String(order.stripeSessionId||'')!==sessionId){
       return res.status(409).json({error:'This checkout does not match the saved order'});
     }
+    let durableAssets={movie:false,storybook:false};
+    try{durableAssets=await finalAssets(mcsJobId,token)}catch{}
+    if(durableAssets.movie&&durableAssets.storybook)return res.status(200).json({ok:true,state:'ready',completedScenes:18,progress:null,message:'Your complete movie is ready.',movieUrl:`/api/order-media?session_id=${encodeURIComponent(sessionId)}&order_id=${encodeURIComponent(mcsJobId)}&kind=movie`,storybookUrl:`/api/order-media?session_id=${encodeURIComponent(sessionId)}&order_id=${encodeURIComponent(mcsJobId)}&kind=storybook`});
 
     if(String(order.status||'').toLowerCase()==='failed'){
       const refunded=String(order.customerState||'')==='refunded'||Boolean(order.refundId);
@@ -118,6 +121,7 @@ export default async function handler(req,res){
       });
     }
 
+    if(!String(order.runpodJobId||'').trim())return res.status(200).json({ok:true,state:'queued',completedScenes:null,progress:null,message:'Your movie is continuing from the preview you approved.',movieUrl:null,storybookUrl:null});
     const {key:runpodKey,base}=runpod();
     if(!runpodKey||!base)return res.status(503).json({error:'Movie rendering is not configured'});
     const response=await fetch(`${base}/status/${encodeURIComponent(order.runpodJobId)}`,{

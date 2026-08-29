@@ -1,16 +1,11 @@
 import {useRef,useState} from 'react';
+import {MOODS} from '../lib/mcs-contract';
 
 const ACCEPTED_PHOTO_TYPES=new Set(['image/jpeg','image/png','image/webp','image/heic','image/heif']);
 const MAX_SOURCE_BYTES=25*1024*1024;
 const MAX_READY_BYTES=3*1024*1024;
 const MAX_SOURCE_PIXELS=60000000;
-const VIBES=[
-  {value:'funny',label:'Funny'},
-  {value:'silly',label:'Silly'},
-  {value:'dramatic',label:'Dramatic'},
-  {value:'spooky',label:'Spooky'},
-  {value:'romantic',label:'Romantic'}
-];
+const VIBES=MOODS.filter(value=>value!=='surprise me').map(value=>({value,label:value.replace(/\b\w/g,letter=>letter.toUpperCase())}));
 
 function canvasJpeg(canvas,quality){return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('This browser could not prepare the photo.')),'image/jpeg',quality))}
 function blobDataUrl(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>reject(new Error('The prepared photo could not be read.'));reader.readAsDataURL(blob)})}
@@ -133,7 +128,7 @@ export default function Create(){
       if(!response.ok)throw new Error(result.error||'Stage failed');
       const resolvedAttempt=Math.max(1,Math.min(3,Number(result.draftAttempt)||draftAttempt));
       const resolvedMode=result.creativeMode==='make_for_me'||result.creativeMode==='my_story'?result.creativeMode:requestMode;
-      const draft={attempt:resolvedAttempt,title:result.title||`Draft ${resolvedAttempt}`,plan:result.plan,storyBrief:result.storyBrief??requestIdea,sourceLedger:result.sourceLedger??null,originalIdea:requestIdea,moods:requestMoods,creativeMode:resolvedMode};
+      const draft={attempt:resolvedAttempt,title:result.title||`Draft ${resolvedAttempt}`,plan:result.plan,scenes:result.scenes,storyBrief:result.storyBrief??requestIdea,sourceLedger:result.sourceLedger??null,originalIdea:requestIdea,moods:requestMoods,creativeMode:resolvedMode};
       setDrafts([draft]);
       setSelectedDraftIndex(0);
       setDraftsUsed(current=>Math.max(current,resolvedAttempt));
@@ -193,10 +188,10 @@ export default function Create(){
     }
     try{
       let response;
-      try{response=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({previewEntitlement,creativeMode:selectedDraft.creativeMode,storyBrief:selectedDraft.storyBrief,sourceLedger:selectedDraft.sourceLedger,originalIdea:selectedDraft.originalIdea,plan:selectedDraft.plan,image,moods:selectedDraft.moods})})}catch{
+      try{response=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({previewEntitlement,creativeMode:selectedDraft.creativeMode,storyBrief:selectedDraft.storyBrief,sourceLedger:selectedDraft.sourceLedger,originalIdea:selectedDraft.originalIdea,plan:selectedDraft.plan,stage:{title:selectedDraft.title,scenes:selectedDraft.scenes},image,moods:selectedDraft.moods})})}catch{
         const recovered=await recoverAcceptedPreview();
         const previewUrl='/preview?jobId='+encodeURIComponent(recovered.jobId)+'&mcsJobId='+encodeURIComponent(recovered.mcsJobId);
-        savePreview({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()});
+        savePreview({url:previewUrl,mcsJobId:recovered.mcsJobId,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()});
         location.href=previewUrl;
         return;
       }
@@ -204,7 +199,7 @@ export default function Create(){
       if(!response.ok)throw new Error(result.error||'Preview failed');
       if(response.status===202||!result.jobId)result=await recoverAcceptedPreview();
       const previewUrl='/preview?jobId='+encodeURIComponent(result.jobId)+'&mcsJobId='+encodeURIComponent(result.mcsJobId);
-      savePreview({url:previewUrl,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()});
+      savePreview({url:previewUrl,mcsJobId:result.mcsJobId,title:selectedDraft?.title||'Your free movie preview',createdAt:Date.now()});
       location.href=previewUrl;
     }catch(error){previewRequest.current=false;setStatus(error.message);setBusy(false)}
   }

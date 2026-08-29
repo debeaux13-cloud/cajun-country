@@ -10,6 +10,9 @@ from pathlib import Path
 import requests
 
 
+GEN4_TURBO_SUPPORTED_RATIOS = frozenset({"1280:720", "720:1280", "1104:832", "832:1104"})
+GEN4_TURBO_PORTRAIT_RATIO = "832:1104"
+
 ANIMATION_DIRECTIVE = (
     "WARM STYLIZED 3D CGI MOVIE. Preserve source identity, anatomy, face, colors/markings, hair/fur, clothing, props, setting, rounded sculpted forms, tactile surfaces, soft light, gentle highlights, and shallow depth. "
     "Keep weight/volume; form through light/shadow, no hard outlines. Never photoreal/live-action or flat 2D/vector. "
@@ -71,7 +74,7 @@ class RunwayGen4Turbo:
                         "model": "gen4_turbo",
                         "promptImage": prompt_image,
                         "promptText": prompt_text,
-                        "ratio": "1280:720",
+                        "ratio": GEN4_TURBO_PORTRAIT_RATIO,
                         "duration": self.duration,
                     },
                     timeout=60,

@@ -84,7 +84,7 @@ class MovieAssemblyTimingTest(unittest.TestCase):
         ])
         _run([
             "ffmpeg", "-y",
-            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=10.8",
+            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=10.0",
             "-f", "lavfi", "-i", "sine=frequency=3000:sample_rate=44100:duration=0.4",
             "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1[a]",
             "-map", "[a]", "-c:a", "pcm_s16le", str(narration),

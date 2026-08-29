@@ -5,10 +5,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import requests, runpod
 from audio_polish import add_background_music, create_background_music, normalize_music_vibe
-from pipeline_steps import build_movie, build_pdf, create_character_master, illustrate, locked_motion_scene_prompt, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
+from pipeline_steps import build_movie, create_character_master, illustrate, locked_motion_scene_prompt, narrate, sound_effect, validate_story_plan, validate_unique_scene_images, verify_movie, verify_obvious_clip_motion
+from storybook_pdf import build_storybook_pdf
 from runway_adapter import RunwayGen4Turbo
 
-BUNDLE_VERSION="2026-08-27-mcs-v20-canonical-character-master"
+BUNDLE_VERSION="2026-08-29-mcs-launch-repair"
 
 def req(name):
     v=os.environ.get(name,"").strip()
@@ -185,7 +186,7 @@ def handler(event):
                     fut={ex.submit(render_scene,root,master,s,i):i-1 for i,s in enumerate(scenes,start=1)}
                     for f in as_completed(fut):rendered[fut[f]]=f.result()
                 images=[x[0] for x in rendered]; narr=[x[1] for x in rendered]; sounds=[x[2] for x in rendered]; vids=[x[3] for x in rendered]; validate_unique_scene_images(images)
-                update("assembling"); movie=str(root/"preview.mp4"); music=str(root/"preview-music-bed.mp3"); build_movie(vids,narr,folder,movie,60,sound_effect_paths=sounds); create_background_music(music,selected_vibe,30); upload("music-bed",music,content_type="audio/mpeg"); add_background_music(movie,folder,60,music_path=music,vibe=selected_vibe); verify_movie(movie,60); upload("preview-movie",movie,content_type="video/mp4"); update("ready",status="ready",manifest=manifest,musicVibe=selected_vibe,musicAsset="music-bed")
+                update("assembling"); movie=str(root/"preview.mp4"); music=str(root/"preview-music-bed.mp3"); build_movie(vids,narr,folder,movie,60,sound_effect_paths=sounds); create_background_music(music,selected_vibe,30); upload("music-bed",music,content_type="audio/mpeg"); add_background_music(movie,folder,60,music_path=music,vibe=selected_vibe); verify_movie(movie,60); upload("preview-movie",movie,content_type="video/mp4"); pdf=str(root/"preview-storybook.pdf"); build_storybook_pdf({**manifest,"scenes":scenes,"pages":[{"sceneNumber":x["sceneNumber"],"text":x["narration"]} for x in scenes]},images,pdf); upload("preview-storybook-pdf",pdf,content_type="application/pdf"); update("ready",status="ready",manifest=manifest,musicVibe=selected_vibe,musicAsset="music-bed")
                 return {"jobId":job_id,"status":"ready","mode":mode,"completed":6,"musicVibe":selected_vibe,"musicContinuity":True}
             if scene_count!=18 or movie_seconds!=180: raise ValueError("Live product must be 18 scenes / 180 seconds")
             rendered=[None]*18
@@ -202,7 +203,7 @@ def handler(event):
             if not music_continuity:
                 create_background_music(music,selected_vibe,30,allow_provider=False)
             add_background_music(movie,folder,180,music_path=music,vibe=selected_vibe); verify_movie(movie,180); upload("final-movie",movie,content_type="video/mp4")
-            update("verifying"); pdf=str(root/"storybook.pdf"); build_pdf(manifest,images,pdf); upload("storybook-pdf",pdf,content_type="application/pdf"); update("ready",status="ready",manifest=manifest)
+            update("verifying"); pdf=str(root/"storybook.pdf"); build_storybook_pdf(manifest,images,pdf); upload("storybook-pdf",pdf,content_type="application/pdf"); update("ready",status="ready",manifest=manifest)
             return {"jobId":job_id,"status":"ready","tier":"three_minute","completed":18,"movieSeconds":180,"musicVibe":selected_vibe,"musicContinuity":music_continuity}
     except Exception as e:
         try:update("manual_review",status="failed",error=str(e))

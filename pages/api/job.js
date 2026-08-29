@@ -1,6 +1,7 @@
 import{head}from'@vercel/blob';
 import{runpod}from'./_runpod';
 import{getPreviewClaimByMcsJobId}from'../../lib/preview-guard';
+import{ensureSavedPreview}from'../../lib/saved-previews';
 
 async function storedPreviewReady(mcsJobId,token){
   if(!mcsJobId||!token)return false;
@@ -19,7 +20,7 @@ export default async function handler(req,res){
   }
   const storedPreview=await storedPreviewReady(mcsJobId,token);
   const effectiveJobId=String(claim?.jobId||requestedJobId).trim();
-  if(storedPreview)return res.status(200).json({ok:true,status:'COMPLETED',providerStatus:String(claim?.status||'').toLowerCase()==='manual_review'?'MANUAL_REVIEW':String(claim?.runpodStatus||'NOT_FOUND'),storedPreviewReady:true,requestedJobId,resolvedJobId:effectiveJobId,jobIdChanged:requestedJobId!==effectiveJobId,videoUrl:'/api/preview-media?id='+encodeURIComponent(mcsJobId),output:{status:'ready'}});
+  if(storedPreview){await ensureSavedPreview(mcsJobId,token).catch(()=>null);return res.status(200).json({ok:true,status:'COMPLETED',providerStatus:String(claim?.status||'').toLowerCase()==='manual_review'?'MANUAL_REVIEW':String(claim?.runpodStatus||'NOT_FOUND'),storedPreviewReady:true,requestedJobId,resolvedJobId:effectiveJobId,jobIdChanged:requestedJobId!==effectiveJobId,videoUrl:'/api/preview-media?id='+encodeURIComponent(mcsJobId),output:{status:'ready'}});}
   if(String(claim?.status||'').toLowerCase()==='manual_review')return res.status(200).json({ok:true,status:'MANUAL_REVIEW',providerStatus:'MANUAL_REVIEW',requestedJobId,resolvedJobId:effectiveJobId,jobIdChanged:requestedJobId!==effectiveJobId,error:claim.failureMessage||'This preview needs manual review.',output:{status:'manual_review'}});
   if(!effectiveJobId)return res.status(404).json({error:'Preview job not found',requestedJobId,resolvedJobId:'',jobIdChanged:false});
   const{key,base}=runpod();

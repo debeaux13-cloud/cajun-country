@@ -1,4 +1,6 @@
 import {getVercelOidcToken} from '@vercel/oidc';
+import {normalizeMoods as canonicalMoods} from '../../lib/mcs-contract';
+import {validateStageScenes} from '../../lib/stage-production';
 
 const MAX_STORY_CHARACTERS=60000;
 const MAX_MOODS=8;
@@ -20,12 +22,7 @@ function normalizeStoryInput(value,{allowEmpty=false}={}){
   return text;
 }
 
-function normalizeMoods(value){
-  const items=Array.isArray(value)?value:[value];
-  const moods=[...new Set(items.map(item=>String(item??'').trim().toLowerCase()).filter(item=>STORY_VIBES.has(item)))].slice(0,MAX_MOODS);
-  if(!moods.length||moods.includes('surprise me'))return['surprise me'];
-  return moods;
-}
+function normalizeMoods(value){return canonicalMoods(value);}
 
 function normalizeDraftAttempt(value){
   const attempt=value===undefined||value===null||value===''?1:Number(value);
@@ -280,7 +277,7 @@ function validateStageResult(value,creativeMode,draftAttempt,priorStoryBriefs,pr
     const visual=String(scene?.visual||'').trim();
     if(title.length<2||location.length<2||narration.length<20||visual.length<20)throw new Error(`Stage scene ${sceneNumber} is incomplete`);
     const narrationWords=narration.split(/\s+/).filter(Boolean).length;
-    if(narrationWords<16||narrationWords>34)throw new Error(`Stage scene ${sceneNumber} narration is outside the safe ten-second range`);
+    if(narrationWords<16||narrationWords>22)throw new Error(`Stage scene ${sceneNumber} narration is outside the safe ten-second range`);
     if(/^\s*(scene|chapter)\s*\d+/i.test(narration))throw new Error(`Stage scene ${sceneNumber} narration contains an internal label`);
     const sourceFactIds=cleanStringArray(scene?.sourceFactIds);
     for(const id of sourceFactIds){
@@ -306,6 +303,7 @@ function validateStageResult(value,creativeMode,draftAttempt,priorStoryBriefs,pr
   const differenceFromPriorDrafts=String(value?.differenceFromPriorDrafts||'').trim();
   if(draftAttempt>1&&differenceFromPriorDrafts.length<30)throw new Error('Stage did not explain how the alternate draft is materially different');
   if(draftAttempt>1&&priorStoryBriefs.some(brief=>wordSimilarity(storyBrief,brief)>.82))throw new Error('Stage alternate draft is too similar to a prior draft');
+  validateStageScenes(scenes);
   return{title:String(value?.title||'Main Character Studios Movie').trim(),creativeMode,draftAttempt,storyBrief,differenceFromPriorDrafts,sourceLedger,scenes};
 }
 
@@ -359,7 +357,7 @@ FILM RULES:
 - Scenes 7-18 complete the same story with escalation, a real climax, and the customer's satisfying emotional ending.
 - Every scene must causally lead into the next: setup creates the goal, each attempt creates a consequence, the setback changes the plan, and the climax resolves the central problem. No disconnected events, unexplained jumps, random props, or filler.
 - Every scene materially changes what is happening through location, blocking, objective, obstacle, prop, supporting character, discovery, or emotion. Do not use filler whose only change is camera angle.
-- Give enough narration for the full three minutes. Each scene needs roughly 20-30 naturally spoken words. Never narrate Scene 1, Scene 2, chapter labels, or production notes.
+- Give enough narration for the full three minutes. Each scene needs 16-22 naturally spoken words per 10-second scene. Never narrate Scene 1, Scene 2, chapter labels, or production notes.
 - Narration describes story and emotion, never camera directions. The visual must match it exactly.
 - Use polished cinematic animated-feature storytelling: dimensional and expressive, between flat children's cartoon and photoreal live action, with detailed environments, depth, meaningful props, and supporting characters where the story calls for them.
 - The main character visibly moves, travels, reacts, and physically interacts. Moving scenery alone does not count.
@@ -381,7 +379,7 @@ Return only the strict JSON requested by the schema. Do not add prose outside it
       let parsed;
       try{parsed=JSON.parse(stripFence(previousOutput))}catch{throw new Error('Stage returned invalid structured story data')}
       const result=validateStageResult(parsed,creativeMode,draftAttempt,priorStoryBriefs,priorSourceLedgers,Boolean(referenceImage));
-      return{plan:formatPlan(result.scenes),sourceLedger:result.sourceLedger,title:result.title,storyBrief:result.storyBrief,differenceFromPriorDrafts:result.differenceFromPriorDrafts,creativeMode:result.creativeMode,draftAttempt:result.draftAttempt,auth};
+      return{plan:formatPlan(result.scenes),scenes:result.scenes,sourceLedger:result.sourceLedger,title:result.title,storyBrief:result.storyBrief,differenceFromPriorDrafts:result.differenceFromPriorDrafts,creativeMode:result.creativeMode,draftAttempt:result.draftAttempt,auth};
     }catch(error){
       lastValidationError=error;
       if(attempt===1)throw error;
@@ -395,9 +393,9 @@ export default async function handler(req,res){
   const trigger=req.body?.trigger==='ai_chat'?'ai_chat':'story_button';
   try{
     console.log('[stage-automation]',JSON.stringify({event:'started',trigger,draftAttempt:Number(req.body?.draftAttempt)||1,hasPhoto:Boolean(req.body?.image)}));
-    const{plan,sourceLedger,title,storyBrief,differenceFromPriorDrafts,creativeMode,draftAttempt,auth}=await makePlan(req.body?.idea,req.body?.moods,req.body?.image,req.body?.draftAttempt,req.body?.priorStoryBriefs,req.body?.priorSourceLedgers);
+    const{plan,scenes,sourceLedger,title,storyBrief,differenceFromPriorDrafts,creativeMode,draftAttempt,auth}=await makePlan(req.body?.idea,req.body?.moods,req.body?.image,req.body?.draftAttempt,req.body?.priorStoryBriefs,req.body?.priorSourceLedgers);
     console.log('[stage-automation]',JSON.stringify({event:'completed',trigger,draftAttempt,title}));
-    return res.status(200).json({ok:true,plan,sourceLedger,title,storyBrief,differenceFromPriorDrafts,creativeMode,draftAttempt,provider:'vercel-ai-gateway',auth});
+    return res.status(200).json({ok:true,plan,scenes,sourceLedger,title,storyBrief,differenceFromPriorDrafts,creativeMode,draftAttempt,provider:'vercel-ai-gateway',auth});
   }catch(error){
     console.error('[stage-automation]',JSON.stringify({event:'failed',trigger,error:String(error?.message||error).slice(0,300)}));
     const status=/at least one thing|longer than|draft attempt|prior story|prior source|add a clear photo|reference|photo/i.test(String(error?.message||''))?400:503;
