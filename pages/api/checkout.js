@@ -19,7 +19,7 @@ async function verifiedPreview(mcsJobId){
 export default async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:'POST only'});
   if(String(process.env.MCS_SALES_ENABLED||'').toLowerCase()!=='true')return res.status(503).json({error:'Main Character Studios checkout is temporarily paused while the studio finishes a production check. Your preview is safe.'});
-  const key=process.env.Stripe||process.env.STRIPE_SECRET_KEY;
+  const key=process.env.STRIPE_SECRET_KEY;
   if(!key)return res.status(503).json({error:'Stripe secret missing'});
   let mcsJobId=String(req.body?.mcsJobId||'').trim();
   const shareToken=String(req.body?.shareToken||'').trim();
