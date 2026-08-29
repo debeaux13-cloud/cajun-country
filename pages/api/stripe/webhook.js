@@ -111,19 +111,48 @@ export default async function handler(req,res){
   const eventPath=`mcs/stripe-events/${String(event.id)}.json`;
   const orderPath=`mcs/orders/${mcsJobId}.json`;
   const sessionPath=`mcs/checkout-sessions/${sessionHash}.json`;
-  const options={access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'};
+  const writeOptions={access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'};
+  const reservationOptions={...writeOptions,allowOverwrite:false};
+  async function writeMappings(record){
+    await Promise.all([
+      put(sessionPath,JSON.stringify(record),writeOptions),
+      put(eventPath,JSON.stringify(record),writeOptions)
+    ]);
+  }
+  async function existingOrder(){
+    try{return await privateJson(orderPath,token)}catch{return null}
+  }
   if(await blobExists(eventPath,token)){
     try{
       const existing=await privateJson(eventPath,token);
-      await put(sessionPath,JSON.stringify(existing),options);
+      await put(sessionPath,JSON.stringify(existing),writeOptions);
     }catch{}
     return res.status(200).json({received:true,duplicate:true});
   }
-  if(await blobExists(orderPath,token)){
-    const existing=await privateJson(orderPath,token);
-    await put(sessionPath,JSON.stringify(existing),options);
-    await put(eventPath,JSON.stringify(existing),options);
-    return res.status(200).json({received:true,duplicate:true});
+  let record=await existingOrder();
+  if(record){
+    await writeMappings(record);
+    if(record.runpodJobId)return res.status(200).json({received:true,duplicate:true});
+    return res.status(200).json({received:true,reconciliationRequired:true,status:record.status||'dispatching'});
+  }
+
+  record={
+    status:'dispatching',
+    stripeEventId:String(event.id),
+    stripeSessionId,
+    stripePaymentIntentId:String(session.payment_intent||''),
+    mcsJobId,
+    mode:event.livemode?'live':'test',
+    createdAt:new Date().toISOString()
+  };
+  try{
+    await put(orderPath,JSON.stringify(record),reservationOptions);
+  }catch(error){
+    const existing=await existingOrder();
+    if(!existing)throw error;
+    await writeMappings(existing);
+    if(existing.runpodJobId)return res.status(200).json({received:true,duplicate:true});
+    return res.status(200).json({received:true,reconciliationRequired:true,status:existing.status||'dispatching'});
   }
 
   const {key,base}=runpod();
@@ -142,28 +171,23 @@ export default async function handler(req,res){
         preview_scene_count:6,
         total_scene_count:18,
         full_duration_seconds:180,
-        stripeSessionId:String(session.id||'')
+        stripeSessionId
       }})
     });
     const result=await response.json();
-    if(!response.ok)throw new Error(result?.error||result?.message||'RunPod rejected paid continuation');
+    if(!response.ok||!result?.id)throw new Error(result?.error||result?.message||'RunPod receipt interrupted');
 
-    const record={
-      stripeEventId:String(event.id),
-      stripeSessionId,
-      stripePaymentIntentId:String(session.payment_intent||''),
-      mcsJobId,
-      runpodJobId:String(result.id||''),
-      runpodStatus:String(result.status||'IN_QUEUE'),
-      mode:event.livemode?'live':'test',
-      createdAt:new Date().toISOString()
-    };
-    await put(orderPath,JSON.stringify(record),options);
-    await put(sessionPath,JSON.stringify(record),options);
-    await put(eventPath,JSON.stringify(record),options);
+    record={...record,runpodJobId:String(result.id),runpodStatus:String(result.status||'IN_QUEUE'),status:'submitted',updatedAt:new Date().toISOString()};
+    await put(orderPath,JSON.stringify(record),writeOptions);
+    await writeMappings(record);
     return res.status(200).json({received:true,started:true});
   }catch(error){
-    console.error('Stripe paid continuation failed',error);
-    return res.status(500).json({error:'Paid movie could not be started; Stripe will retry'});
+    const current=await existingOrder();
+    if(!current?.runpodJobId){
+      record={...(current||record),status:'dispatch_unknown',dispatchError:String(error?.message||error).slice(0,300),updatedAt:new Date().toISOString()};
+      try{await put(orderPath,JSON.stringify(record),writeOptions);await writeMappings(record)}catch{}
+    }
+    console.error('Stripe paid continuation requires reconciliation',error);
+    return res.status(200).json({received:true,reconciliationRequired:true});
   }
 }

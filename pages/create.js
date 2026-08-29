@@ -156,12 +156,10 @@ export default function Create(){
         if(!response.ok&&result?.status!=='retry_required')throw new Error(result?.error||'Photo check failed');
         const resolved=['good','caution','retry_required'].includes(result?.status)?result:{status:'caution',reason:'The automatic photo check was inconclusive.',tip:'You can continue, or choose a clearer photo for the strongest likeness.',visiblePrincipalSubjectCount:0};
         setPhotoCheck(resolved);
-        setStatus(resolved.status==='retry_required'?'Please choose another photo before creating the story.':'Photo ready. Stage is looking at everyone in it now…');
-        if(resolved.status!=='retry_required')void talkToStage('',readyImage,[]);
+        setStatus(resolved.status==='retry_required'?'Please choose another photo before creating the story.':'Photo ready. Tell Stage your idea or choose a story type.');
       }catch{
         setPhotoCheck({status:'caution',reason:'The automatic photo check is temporarily unavailable, so we did not reject your picture.',tip:'You can still create and compare text stories. Upload the photo again before starting the protected moving preview.',visiblePrincipalSubjectCount:0,previewEntitlement:''});
-        setStatus('Photo ready for text stories. Stage is looking at everyone in it now…');
-        void talkToStage('',readyImage,[]);
+        setStatus('Photo ready. Tell Stage your idea or choose a story type.');
       }
     }catch(error){event.target.value='';setStatus(error.message)}finally{setCheckingPhoto(false)}
   }
