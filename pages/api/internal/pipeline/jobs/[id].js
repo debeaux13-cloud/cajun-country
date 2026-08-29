@@ -32,7 +32,7 @@ async function persistProviderCheckpoint(id,body){const scene=Number(body?.scene
 function storyMoods(saved){return normalizeMoods(Array.isArray(saved?.moods)?saved.moods:[saved?.selectedVibe]);}
 async function contract(id){
   const base='https://main-character-studios.vercel.app/api/internal/pipeline/jobs/'+id;
-  const runway=process.env.Runway||process.env.RUNWAY_API_KEY||'';
+  const runway=process.env.RUNWAY_API_KEY||process.env.Runway||'';
   const eleven=process.env.ELEVENLABS_API_KEY||process.env.Elevenlabs_Secured_key||process.env.Elevenlabs_Secured_key_2||'';
   const[saved,existingProviderJobs]=await Promise.all([loadStageData(id),loadProviderJobs(id)]);
   const scenes=storyScenes(saved);
