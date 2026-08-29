@@ -9,7 +9,7 @@ function storyMoods(saved){return normalizeMoods(Array.isArray(saved?.moods)?sav
 async function contract(id){
   const origin='https://main-character-studios.vercel.app';
   const paidAsset=`${origin}/api/internal/pipeline/jobs/${id}/asset`;
-  const runway=process.env.Runway||process.env.RUNWAY_API_KEY||'';
+  const runway=process.env.RUNWAY_API_KEY||process.env.Runway||'';
   const eleven=process.env.ELEVENLABS_API_KEY||process.env.Elevenlabs_Secured_key||process.env.Elevenlabs_Secured_key_2||'';
   const saved=await loadStory(id);
   const scenes=previewScenes(saved);
@@ -43,6 +43,6 @@ export default async function handler(req,res){if(!auth(req))return res.status(4
   const path=`mcs/jobs/${id}/progress-${update.scene||0}.json`;
   await put(path,Buffer.from(JSON.stringify(update)),{access:'private',addRandomSuffix:false,allowOverwrite:true,token,contentType:'application/json'});
   if(update.stage==='ready'&&update.status==='ready')await persistSavedPreview(id,token,update.updatedAt);
-  console.log('[preview-scene]',JSON.stringify({id,stage:update.stage||'',status:update.status||'',scene:update.scene||0,provider:update.provider||'',providerJobId:update.providerJobId||''}));
+  console.log('[preview-scene]',JSON.stringify({id,stage:update.stage||'',status:update.status||'',scene:update.scene||0,provider:update.provider||'',providerJobId:update.providerJobId||'',error:String(update.error||'').slice(0,500)}));
   return res.status(200).json({ok:true,id,...update});
 }return res.status(405).json({error:'Method not allowed'})}
